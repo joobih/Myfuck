@@ -4,7 +4,7 @@
 #define quote(s) #s
 #define str(s) quote(s)
 
-constexpr char MAGISK_RC[] =
+constexpr char MYFUCK_RC[] =
 "\n"
 
 "on post-fs-data\n"

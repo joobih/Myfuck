@@ -123,9 +123,9 @@ val syncAssets by tasks.registering(Sync::class) {
     }
     filesMatching("**/util_functions.sh") {
         filter {
-            it.replace("#MAGISK_VERSION_STUB",
-                "MAGISK_VER='${Config.version}'\n" +
-                "MAGISK_VER_CODE=${Config.versionCode}")
+            it.replace("#MYFUCK_VERSION_STUB",
+                "MYFUCK_VER='${Config.version}'\n" +
+                "MYFUCK_VER_CODE=${Config.versionCode}")
         }
         filter<FixCrLfFilter>("eol" to FixCrLfFilter.CrLf.newInstance("lf"))
     }

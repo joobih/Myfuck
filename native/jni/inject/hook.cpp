@@ -234,7 +234,7 @@ static int hook_register(const char *path, const char *symbol, void *new_func, v
     hook_register(PATH_REGEX, #NAME, (void*) new_##NAME, (void **) &old_##NAME)
 
 void hook_functions() {
-#ifdef MAGISK_DEBUG
+#ifdef MYFUCK_DEBUG
     xhook_enable_debug(1);
     xhook_enable_sigsegv_protection(0);
 #endif

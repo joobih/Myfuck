@@ -74,5 +74,5 @@ class NetworkService(
     suspend fun fetchFile(url: String) = wrap { raw.fetchFile(url) }
     suspend fun fetchString(url: String) = wrap { raw.fetchString(url) }
 
-    private suspend fun fetchMainVersion() = api.fetchBranch(MAGISK_MAIN, "master").commit.sha
+    private suspend fun fetchMainVersion() = api.fetchBranch(MYFUCK_MAIN, "master").commit.sha
 }

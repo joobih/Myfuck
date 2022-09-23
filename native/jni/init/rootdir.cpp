@@ -37,7 +37,7 @@ static void patch_init_rc(const char *src, const char *dest, const char *tmp_dir
     // Inject custom rc scripts
     for (auto &script : rc_list) {
         // Replace template arguments of rc scripts with dynamic paths
-        replace_all(script, "${MAGISKTMP}", tmp_dir);
+        replace_all(script, "${MYFUCKTMP}", tmp_dir);
         fprintf(rc, "\n%s\n", script.data());
     }
     rc_list.clear();
@@ -48,7 +48,7 @@ static void patch_init_rc(const char *src, const char *dest, const char *tmp_dir
     gen_rand_str(ls_svc, sizeof(ls_svc));
     gen_rand_str(bc_svc, sizeof(bc_svc));
     LOGD("Inject myfuck services: [%s] [%s] [%s]\n", pfd_svc, ls_svc, bc_svc);
-    fprintf(rc, MAGISK_RC, tmp_dir, pfd_svc, ls_svc, bc_svc);
+    fprintf(rc, MYFUCK_RC, tmp_dir, pfd_svc, ls_svc, bc_svc);
 
     fclose(rc);
     clone_attr(src, dest);

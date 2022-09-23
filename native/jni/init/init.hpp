@@ -26,7 +26,7 @@ struct fstab_entry {
     void to_file(FILE *fp);
 };
 
-#define INIT_SOCKET "MAGISKINIT"
+#define INIT_SOCKET "MYFUCKINIT"
 #define DEFAULT_DT_DIR "/proc/device-tree/firmware/android"
 
 extern std::vector<std::string> mount_list;

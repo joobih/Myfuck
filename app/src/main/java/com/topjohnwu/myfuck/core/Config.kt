@@ -61,7 +61,7 @@ object Config : PreferenceModel, DBConfig {
         const val DOH = "doh"
 
         // system state
-        const val MAGISKHIDE = "myfuckhide"
+        const val MYFUCKHIDE = "myfuckhide"
     }
 
     object Value {
@@ -133,7 +133,7 @@ object Config : PreferenceModel, DBConfig {
     var suTapjack by preference(Key.SU_TAPJACK, true)
     var checkUpdate by preference(Key.CHECK_UPDATES, true)
     var doh by preference(Key.DOH, false)
-    var myfuckHide by preference(Key.MAGISKHIDE, true)
+    var myfuckHide by preference(Key.MYFUCKHIDE, true)
     var showSystemApp by preference(Key.SHOW_SYSTEM_APP, false)
 
     var customChannelUrl by preference(Key.CUSTOM_CHANNEL, "")

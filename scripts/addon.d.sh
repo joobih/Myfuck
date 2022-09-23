@@ -9,8 +9,8 @@
 
 trampoline() {
   mount /data 2>/dev/null
-  if [ -f $MAGISKBIN/addon.d.sh ]; then
-    exec sh $MAGISKBIN/addon.d.sh "$@"
+  if [ -f $MYFUCKBIN/addon.d.sh ]; then
+    exec sh $MYFUCKBIN/addon.d.sh "$@"
     exit $?
   elif [ "$1" = post-restore ]; then
     BOOTMODE=false
@@ -43,8 +43,8 @@ trampoline() {
 }
 
 # Always use the script in /data
-MAGISKBIN=/data/adb/myfuck
-[ "$0" = $MAGISKBIN/addon.d.sh ] || trampoline "$@"
+MYFUCKBIN=/data/adb/myfuck
+[ "$0" = $MYFUCKBIN/addon.d.sh ] || trampoline "$@"
 
 V1_FUNCS=/tmp/backuptool.functions
 V2_FUNCS=/postinstall/tmp/backuptool.functions
@@ -60,7 +60,7 @@ fi
 
 initialize() {
   # Load utility functions
-  . $MAGISKBIN/util_functions.sh
+  . $MYFUCKBIN/util_functions.sh
 
   if $BOOTMODE; then
     # Override ui_print when booted
@@ -82,10 +82,10 @@ main() {
 
   $BOOTMODE || recovery_actions
 
-  if echo $MAGISK_VER | grep -q '\.'; then
-    PRETTY_VER=$MAGISK_VER
+  if echo $MYFUCK_VER | grep -q '\.'; then
+    PRETTY_VER=$MYFUCK_VER
   else
-    PRETTY_VER="$MAGISK_VER($MAGISK_VER_CODE)"
+    PRETTY_VER="$MYFUCK_VER($MYFUCK_VER_CODE)"
   fi
   print_title "Myfuck $PRETTY_VER addon.d"
 

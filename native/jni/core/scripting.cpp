@@ -15,14 +15,14 @@ using namespace std;
 static const char *bbpath() {
     static string path;
     if (path.empty())
-        path = MAGISKTMP + "/" BBPATH "/busybox";
+        path = MYFUCKTMP + "/" BBPATH "/busybox";
     return path.data();
 }
 
 static void set_script_env() {
     setenv("ASH_STANDALONE", "1", 1);
     char new_path[4096];
-    sprintf(new_path, "%s:%s", getenv("PATH"), MAGISKTMP.data());
+    sprintf(new_path, "%s:%s", getenv("PATH"), MYFUCKTMP.data());
     setenv("PATH", new_path, 1);
 };
 

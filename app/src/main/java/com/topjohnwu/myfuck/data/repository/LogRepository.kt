@@ -27,14 +27,14 @@ class LogRepository(
                 }
             }
         }
-        Shell.su("cat ${Const.MAGISK_LOG}").to(list).await()
+        Shell.su("cat ${Const.MYFUCK_LOG}").to(list).await()
         return list.buf.toString()
     }
 
     suspend fun clearLogs() = logDao.deleteAll()
 
     fun clearMyfuckLogs(cb: (Shell.Result) -> Unit) =
-        Shell.su("echo -n > ${Const.MAGISK_LOG}").submit(cb)
+        Shell.su("echo -n > ${Const.MYFUCK_LOG}").submit(cb)
 
     suspend fun insert(log: SuLog) = logDao.insert(log)
 

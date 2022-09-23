@@ -24,8 +24,8 @@ static bool safe_mode = false;
  *********/
 
 #define MNT_DIR_IS(dir)   (me->mnt_dir == string_view(dir))
-#define SETMIR(b, part)   sprintf(b, "%s/" MIRRDIR "/" #part, MAGISKTMP.data())
-#define SETBLK(b, part)   sprintf(b, "%s/" BLOCKDIR "/" #part, MAGISKTMP.data())
+#define SETMIR(b, part)   sprintf(b, "%s/" MIRRDIR "/" #part, MYFUCKTMP.data())
+#define SETBLK(b, part)   sprintf(b, "%s/" BLOCKDIR "/" #part, MYFUCKTMP.data())
 
 #define do_mount_mirror(part, flag) {\
     SETMIR(buf1, part); \
@@ -143,7 +143,7 @@ static bool myfuck_env() {
     if (access(DATABIN "/busybox", X_OK))
         return false;
 
-    sprintf(buf, "%s/" BBPATH "/busybox", MAGISKTMP.data());
+    sprintf(buf, "%s/" BBPATH "/busybox", MYFUCKTMP.data());
     mkdir(dirname(buf), 0755);
     cp_afc(DATABIN "/busybox", buf);
     exec_command_async(buf, "--install", "-s", dirname(buf));
@@ -360,7 +360,7 @@ void boot_complete(int client) {
             install_apk("/data/myfuck.apk");
         } else {
             // Install stub
-            auto init = MAGISKTMP + "/myfuckinit";
+            auto init = MYFUCKTMP + "/myfuckinit";
             exec_command_sync(init.data(), "-x", "manager", "/data/myfuck.apk");
             install_apk("/data/myfuck.apk");
         }

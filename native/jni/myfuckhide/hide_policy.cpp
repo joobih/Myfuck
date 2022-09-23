@@ -108,7 +108,7 @@ void hide_unmount(int pid) {
     vector<string> targets;
 
     // Unmount dummy skeletons and /sbin links
-    targets.push_back(MAGISKTMP);
+    targets.push_back(MYFUCKTMP);
     parse_mnt("/proc/self/mounts", [&](mntent *mentry) {
         if (TMPFS_MNT(system) || TMPFS_MNT(vendor) || TMPFS_MNT(product) || TMPFS_MNT(system_ext))
             targets.emplace_back(mentry->mnt_dir);

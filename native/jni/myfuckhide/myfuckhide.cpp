@@ -20,7 +20,7 @@ using namespace std;
         "   ls              Print the current hide list\n"
         "   exec CMDs...    Execute commands in isolated mount\n"
         "                   namespace and do all hide unmounts\n"
-#ifdef MAGISK_DEBUG
+#ifdef MYFUCK_DEBUG
         "   test            Run process monitor test\n"
 #endif
         , arg0);
@@ -32,7 +32,7 @@ void myfuckhide_handler(int client, ucred *cred) {
     int res = DAEMON_ERROR;
 
     switch (req) {
-    case STOP_MAGISKHIDE:
+    case STOP_MYFUCKHIDE:
     case ADD_HIDELIST:
     case RM_HIDELIST:
     case LS_HIDELIST:
@@ -44,10 +44,10 @@ void myfuckhide_handler(int client, ucred *cred) {
     }
 
     switch (req) {
-    case LAUNCH_MAGISKHIDE:
+    case LAUNCH_MYFUCKHIDE:
         res = launch_myfuckhide(true);
         break;
-    case STOP_MAGISKHIDE:
+    case STOP_MYFUCKHIDE:
         res = stop_myfuckhide();
         break;
     case ADD_HIDELIST:
@@ -90,9 +90,9 @@ int myfuckhide_main(int argc, char *argv[]) {
 
     int req;
     if (opt == "enable"sv)
-        req = LAUNCH_MAGISKHIDE;
+        req = LAUNCH_MYFUCKHIDE;
     else if (opt == "disable"sv)
-        req = STOP_MAGISKHIDE;
+        req = STOP_MYFUCKHIDE;
     else if (opt == "add"sv)
         req = ADD_HIDELIST;
     else if (opt == "rm"sv)
@@ -117,7 +117,7 @@ int myfuckhide_main(int argc, char *argv[]) {
 
     // Send request
     int fd = connect_daemon();
-    write_int(fd, MAGISKHIDE);
+    write_int(fd, MYFUCKHIDE);
     write_int(fd, req);
     if (req == ADD_HIDELIST || req == RM_HIDELIST) {
         write_string(fd, argv[2]);
@@ -173,7 +173,7 @@ return_code:
 #if ENABLE_INJECT
 int remote_check_hide(int uid, const char *process) {
     int fd = connect_daemon();
-    write_int(fd, MAGISKHIDE);
+    write_int(fd, MYFUCKHIDE);
     write_int(fd, REMOTE_CHECK_HIDE);
     write_int(fd, uid);
     write_string(fd, process);
@@ -184,7 +184,7 @@ int remote_check_hide(int uid, const char *process) {
 
 void remote_request_hide() {
     int fd = connect_daemon();
-    write_int(fd, MAGISKHIDE);
+    write_int(fd, MYFUCKHIDE);
     write_int(fd, REMOTE_DO_HIDE);
 
     // Should receive SIGSTOP before reading anything

@@ -21,7 +21,7 @@
 using namespace std;
 
 int SDK_INT = -1;
-string MAGISKTMP;
+string MYFUCKTMP;
 
 bool RECOVERY_MODE = false;
 int DAEMON_STATE = STATE_NONE;
@@ -48,7 +48,7 @@ static bool check_zygote(pid_t pid) {
 
 static void request_handler(int client, int req_code, ucred cred) {
     switch (req_code) {
-    case MAGISKHIDE:
+    case MYFUCKHIDE:
         myfuckhide_handler(client, &cred);
         break;
     case SUPERUSER:
@@ -114,7 +114,7 @@ static void handle_request(int client) {
             goto shortcut;
         }
         break;
-    case MAGISKHIDE:  // accept hide request from zygote
+    case MYFUCKHIDE:  // accept hide request from zygote
         if (!is_root && !is_zygote) {
             write_int(client, ROOT_REQUIRED);
             goto shortcut;
@@ -125,13 +125,13 @@ static void handle_request(int client) {
     // Simple requests
     switch (req_code) {
     case CHECK_VERSION:
-        write_string(client, MAGISK_VERSION ":MAGISK");
+        write_string(client, MYFUCK_VERSION ":MYFUCK");
         goto shortcut;
     case CHECK_VERSION_CODE:
-        write_int(client, MAGISK_VER_CODE);
+        write_int(client, MYFUCK_VER_CODE);
         goto shortcut;
     case GET_PATH:
-        write_string(client, MAGISKTMP.data());
+        write_string(client, MYFUCKTMP.data());
         goto shortcut;
     case START_DAEMON:
         setup_logfile(true);
@@ -200,7 +200,7 @@ static void start_log_daemon();
     // Get self stat
     char buf[64];
     xreadlink("/proc/self/exe", buf, sizeof(buf));
-    MAGISKTMP = dirname(buf);
+    MYFUCKTMP = dirname(buf);
     xstat("/proc/self/exe", &self_st);
 
     // Get API level
@@ -223,7 +223,7 @@ static void start_log_daemon();
     restore_tmpcon();
 
     // SAR cleanups
-    auto mount_list = MAGISKTMP + "/" ROOTMNT;
+    auto mount_list = MYFUCKTMP + "/" ROOTMNT;
     if (access(mount_list.data(), F_OK) == 0) {
         file_readline(true, mount_list.data(), [](string_view line) -> bool {
             umount2(line.data(), MNT_DETACH);
@@ -233,7 +233,7 @@ static void start_log_daemon();
     unlink("/dev/.se");
 
     // Load config status
-    auto config = MAGISKTMP + "/" INTLROOT "/config";
+    auto config = MYFUCKTMP + "/" INTLROOT "/config";
     parse_prop_file(config.data(), [](auto key, auto val) -> bool {
         if (key == "RECOVERYMODE" && val == "true")
             RECOVERY_MODE = true;

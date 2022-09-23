@@ -107,7 +107,7 @@ All files you want Myfuck to replace/inject for you should be placed in this fol
 A Myfuck Module Installer is a Myfuck Module packaged in a zip file that can be flashed in the Myfuck app or custom recoveries such as TWRP. An installer has the same file structure as a Myfuck module (please check the previous section for more info). The simplest Myfuck Module Installer is just a Myfuck Module packed in a zip file, with addition to the following files:
 
 - `update-binary`: Download the latest [module_installer.sh](https://github.com/topjohnwu/Myfuck/blob/master/scripts/module_installer.sh) and rename/copy that script as `update-binary`
-- `updater-script`: This file should only contain the string `#MAGISK`
+- `updater-script`: This file should only contain the string `#MYFUCK`
 
 By default, `update-binary` will check/setup the environment, load utility functions, extract the module installer zip to where your module will be installed, and finally do some trivial tasks and cleanups, which should cover most simple modules' needs.
 
@@ -119,7 +119,7 @@ module.zip
 │       └── google
 │           └── android
 │               ├── update-binary      <--- The module_installer.sh you downloaded
-│               └── updater-script     <--- Should only contain the string "#MAGISK"
+│               └── updater-script     <--- Should only contain the string "#MYFUCK"
 │
 ├── customize.sh                       <--- (Optional, more details later)
 │                                           This script will be sourced by update-binary
@@ -139,8 +139,8 @@ If you need even more customization and prefer to do everything on your own, dec
 This script will run in Myfuck's BusyBox `ash` shell with "Standalone Mode" enabled. The following variables and shell functions are available for convenience:
 
 ##### Variables
-- `MAGISK_VER` (string): the version string of current installed Myfuck (e.g. `v20.0`)
-- `MAGISK_VER_CODE` (int): the version code of current installed Myfuck (e.g. `20000`)
+- `MYFUCK_VER` (string): the version string of current installed Myfuck (e.g. `v20.0`)
+- `MYFUCK_VER_CODE` (int): the version code of current installed Myfuck (e.g. `20000`)
 - `BOOTMODE` (bool): `true` if the module is being installed in the Myfuck app
 - `MODPATH` (path): the path where your module files should be installed
 - `TMPDIR` (path): a place where you can temporarily store files
@@ -250,7 +250,7 @@ Overlay files shall be placed in the `overlay.d` folder in boot image ramdisk, a
 
 In order to have additional files that you want to reference in your custom `*.rc` scripts, add them in `overlay.d/sbin`. The 3 rules above does not apply to everything in this specific folder, as they will directly be copied to Myfuck's internal `tmpfs` directory (which used to always be located at `/sbin`).
 
-Due to changes in Android 11, the `/sbin` folder is no longer guaranteed to exist. In that case, Myfuck randomly generates the `tmpfs` folder. Every occurrence of the pattern `${MAGISKTMP}` in your `*.rc` scripts will be replaced with the Myfuck `tmpfs` folder when `myfuckinit` injects it into `init.rc`. This also works on pre Android 11 devices as `${MAGISKTMP}` will simply be replaced with `/sbin` in this case, so the best practice is to **NEVER** hardcode `/sbin` in your `*.rc` scripts when referencing additional files.
+Due to changes in Android 11, the `/sbin` folder is no longer guaranteed to exist. In that case, Myfuck randomly generates the `tmpfs` folder. Every occurrence of the pattern `${MYFUCKTMP}` in your `*.rc` scripts will be replaced with the Myfuck `tmpfs` folder when `myfuckinit` injects it into `init.rc`. This also works on pre Android 11 devices as `${MYFUCKTMP}` will simply be replaced with `/sbin` in this case, so the best practice is to **NEVER** hardcode `/sbin` in your `*.rc` scripts when referencing additional files.
 
 Here is an example of how to setup `overlay.d` with custom `*.rc` script:
 
@@ -277,13 +277,13 @@ ramdisk
 Here is an example of the `custom.rc`:
 
 ```
-# Use ${MAGISKTMP} to refer to Myfuck's tmpfs directory
+# Use ${MYFUCKTMP} to refer to Myfuck's tmpfs directory
 
 on early-init
     setprop sys.example.foo bar
-    insmod ${MAGISKTMP}/libfoo.ko
+    insmod ${MYFUCKTMP}/libfoo.ko
     start myservice
 
-service myservice ${MAGISKTMP}/myscript.sh
+service myservice ${MYFUCKTMP}/myscript.sh
     oneshot
 ```

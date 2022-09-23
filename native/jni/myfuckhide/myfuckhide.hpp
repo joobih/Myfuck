@@ -48,8 +48,8 @@ extern pthread_mutex_t hide_state_lock;
 extern std::map<int, std::vector<std::string_view>> uid_proc_map;
 
 enum {
-    LAUNCH_MAGISKHIDE,
-    STOP_MAGISKHIDE,
+    LAUNCH_MYFUCKHIDE,
+    STOP_MYFUCKHIDE,
     ADD_HIDELIST,
     RM_HIDELIST,
     LS_HIDELIST,

@@ -8,7 +8,7 @@ run_delay() {
 
 env_check() {
   for file in busybox myfuckboot myfuckinit util_functions.sh boot_patch.sh; do
-    [ -f $MAGISKBIN/$file ] || return 1
+    [ -f $MYFUCKBIN/$file ] || return 1
   done
   return 0
 }
@@ -33,12 +33,12 @@ cp_readlink() {
 
 fix_env() {
   # Cleanup and make dirs
-  rm -rf $MAGISKBIN/*
-  mkdir -p $MAGISKBIN 2>/dev/null
+  rm -rf $MYFUCKBIN/*
+  mkdir -p $MYFUCKBIN 2>/dev/null
   chmod 700 $NVBASE
-  cp_readlink $1 $MAGISKBIN
+  cp_readlink $1 $MYFUCKBIN
   rm -rf $1
-  chown -R 0:0 $MAGISKBIN
+  chown -R 0:0 $MYFUCKBIN
 }
 
 direct_install() {
@@ -107,8 +107,8 @@ EOF
 
 add_hosts_module() {
   # Do not touch existing hosts module
-  [ -d $MAGISKTMP/modules/hosts ] && return
-  cd $MAGISKTMP/modules
+  [ -d $MYFUCKTMP/modules/hosts ] && return
+  cd $MYFUCKTMP/modules
   mkdir -p hosts/system/etc
   cat << EOF > hosts/module.prop
 id=hosts
@@ -204,7 +204,7 @@ app_init() {
   mount_partitions
   get_flags
   run_migrations
-  SHA1=$(grep_prop SHA1 $MAGISKTMP/config)
+  SHA1=$(grep_prop SHA1 $MYFUCKTMP/config)
   check_boot_ramdisk && RAMDISKEXIST=true || RAMDISKEXIST=false
   check_encryption
   # Make sure RECOVERYMODE has value

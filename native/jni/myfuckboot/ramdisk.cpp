@@ -12,7 +12,7 @@ static const char *UNSUPPORT_LIST[] =
         { "sbin/launch_daemonsu.sh", "sbin/vigo", "init.xposed.rc",
           "boot/sbin/launch_daemonsu.sh" };
 
-static const char *MAGISK_LIST[] =
+static const char *MYFUCK_LIST[] =
         { ".backup/.myfuck", "init.myfuck.rc",
           "overlay/init.myfuck.rc" };
 
@@ -66,7 +66,7 @@ void myfuck_cpio::patch() {
 }
 
 #define STOCK_BOOT        0
-#define MAGISK_PATCHED    (1 << 0)
+#define MYFUCK_PATCHED    (1 << 0)
 #define UNSUPPORTED_CPIO  (1 << 1)
 #define COMPRESSED_CPIO   (1 << 2)
 
@@ -78,13 +78,13 @@ int myfuck_cpio::test() {
     int flags = STOCK_BOOT;
 
     if (exists(RAMDISK_XZ)) {
-        flags |= COMPRESSED_CPIO | MAGISK_PATCHED;
+        flags |= COMPRESSED_CPIO | MYFUCK_PATCHED;
         decompress();
     }
 
-    for (auto file : MAGISK_LIST) {
+    for (auto file : MYFUCK_LIST) {
         if (exists(file)) {
-            flags |= MAGISK_PATCHED;
+            flags |= MYFUCK_PATCHED;
             break;
         }
     }

@@ -12,8 +12,8 @@ private const val BRANCH = "branch"
 private const val REPO = "repo"
 private const val FILE = "file"
 
-const val MAGISK_FILES = "topjohnwu/myfuck-files"
-const val MAGISK_MAIN = "topjohnwu/Myfuck"
+const val MYFUCK_FILES = "topjohnwu/myfuck-files"
+const val MYFUCK_MAIN = "topjohnwu/Myfuck"
 
 interface GithubPageServices {
 
@@ -23,15 +23,15 @@ interface GithubPageServices {
 
 interface JSDelivrServices {
 
-    @GET("$MAGISK_FILES@{$REVISION}/snet")
+    @GET("$MYFUCK_FILES@{$REVISION}/snet")
     @Streaming
     suspend fun fetchSafetynet(@Path(REVISION) revision: String = Const.SNET_REVISION): ResponseBody
 
-    @GET("$MAGISK_FILES@{$REVISION}/bootctl")
+    @GET("$MYFUCK_FILES@{$REVISION}/bootctl")
     @Streaming
     suspend fun fetchBootctl(@Path(REVISION) revision: String = Const.BOOTCTL_REVISION): ResponseBody
 
-    @GET("$MAGISK_MAIN@{$REVISION}/scripts/module_installer.sh")
+    @GET("$MYFUCK_MAIN@{$REVISION}/scripts/module_installer.sh")
     @Streaming
     suspend fun fetchInstaller(@Path(REVISION) revision: String): ResponseBody
 }

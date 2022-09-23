@@ -2,7 +2,7 @@
 # Myfuck General Utility Functions
 ############################################
 
-#MAGISK_VERSION_STUB
+#MYFUCK_VERSION_STUB
 
 ###################
 # Helper Functions
@@ -47,7 +47,7 @@ getvar() {
   local VARNAME=$1
   local VALUE
   local PROPPATH='/data/.myfuck /cache/.myfuck'
-  [ ! -z $MAGISKTMP ] && PROPPATH="$MAGISKTMP/config $PROPPATH"
+  [ ! -z $MYFUCKTMP ] && PROPPATH="$MYFUCKTMP/config $PROPPATH"
   VALUE=$(grep_prop $VARNAME $PROPPATH)
   [ ! -z $VALUE ] && eval $VARNAME=\$VALUE
 }
@@ -66,7 +66,7 @@ abort() {
 }
 
 resolve_vars() {
-  MAGISKBIN=$NVBASE/myfuck
+  MYFUCKBIN=$NVBASE/myfuck
   POSTFSDATAD=$NVBASE/post-fs-data.d
   SERVICED=$NVBASE/service.d
 }
@@ -117,8 +117,8 @@ ensure_bb() {
   local bb
   if [ -f $TMPDIR/busybox ]; then
     bb=$TMPDIR/busybox
-  elif [ -f $MAGISKBIN/busybox ]; then
-    bb=$MAGISKBIN/busybox
+  elif [ -f $MYFUCKBIN/busybox ]; then
+    bb=$MYFUCKBIN/busybox
   else
     abort "! Cannot find BusyBox"
   fi
@@ -446,7 +446,7 @@ flash_image() {
 
 # Common installation script for flash_script.sh and addon.d.sh
 install_myfuck() {
-  cd $MAGISKBIN
+  cd $MYFUCKBIN
 
   if [ ! -c $BOOTIMAGE ]; then
     eval $BOOTSIGNER -verify < $BOOTIMAGE && BOOTSIGNED=true
@@ -589,7 +589,7 @@ run_migrations() {
     BACKUP=/data/adb/myfuck/stock_${name}.img
     [ -f $BACKUP ] || continue
     if [ $name = 'boot' ]; then
-      LOCSHA1=`$MAGISKBIN/myfuckboot sha1 $BACKUP`
+      LOCSHA1=`$MYFUCKBIN/myfuckboot sha1 $BACKUP`
       mkdir /data/myfuck_backup_${LOCSHA1} 2>/dev/null
     fi
     TARGET=/data/myfuck_backup_${LOCSHA1}/${name}.img

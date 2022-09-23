@@ -5,8 +5,8 @@
 
 #define INJECT_LIB_1 "/dev/tmp/myfuck.1.so"
 #define INJECT_LIB_2 "/dev/tmp/myfuck.2.so"
-#define INJECT_ENV_1 "MAGISK_INJ_1"
-#define INJECT_ENV_2 "MAGISK_INJ_2"
+#define INJECT_ENV_1 "MYFUCK_INJ_1"
+#define INJECT_ENV_2 "MYFUCK_INJ_2"
 
 // Unmap all pages matching the name
 void unmap_all(const char *name);

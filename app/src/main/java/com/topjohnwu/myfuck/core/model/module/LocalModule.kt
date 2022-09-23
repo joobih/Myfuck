@@ -75,14 +75,14 @@ class LocalModule(path: String) : Module() {
 
     companion object {
 
-        private val PERSIST get() = "${Const.MAGISKTMP}/mirror/persist/myfuck"
+        private val PERSIST get() = "${Const.MYFUCKTMP}/mirror/persist/myfuck"
 
         suspend fun installed() = withContext(Dispatchers.IO) {
-            SuFile(Const.MAGISK_PATH)
+            SuFile(Const.MYFUCK_PATH)
                 .listFiles { _, name -> name != "lost+found" && name != ".core" }
                 .orEmpty()
                 .filter { !it.isFile }
-                .map { LocalModule("${Const.MAGISK_PATH}/${it.name}") }
+                .map { LocalModule("${Const.MYFUCK_PATH}/${it.name}") }
                 .sortedBy { it.name.toLowerCase() }
         }
     }

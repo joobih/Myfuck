@@ -12,11 +12,11 @@ object Const {
     val CPU_ABI_32: String = Build.SUPPORTED_32_BIT_ABIS.firstOrNull() ?: CPU_ABI
 
     // Paths
-    lateinit var MAGISKTMP: String
+    lateinit var MYFUCKTMP: String
     lateinit var NATIVE_LIB_DIR: File
-    val MAGISK_PATH get() = "$MAGISKTMP/modules"
+    val MYFUCK_PATH get() = "$MYFUCKTMP/modules"
     const val TMPDIR = "/dev/tmp"
-    const val MAGISK_LOG = "/cache/myfuck.log"
+    const val MYFUCK_LOG = "/cache/myfuck.log"
 
     // Versions
     const val SNET_EXT_VER = 17
@@ -40,7 +40,7 @@ object Const {
         const val APK_UPDATE_NOTIFICATION_ID = 5
         const val UPDATE_NOTIFICATION_CHANNEL = "update"
         const val PROGRESS_NOTIFICATION_CHANNEL = "progress"
-        const val CHECK_MAGISK_UPDATE_WORKER_ID = "myfuck_update"
+        const val CHECK_MYFUCK_UPDATE_WORKER_ID = "myfuck_update"
     }
 
     object Url {
@@ -66,7 +66,7 @@ object Const {
     object Value {
         const val FLASH_ZIP = "flash"
         const val PATCH_FILE = "patch"
-        const val FLASH_MAGISK = "myfuck"
+        const val FLASH_MYFUCK = "myfuck"
         const val FLASH_INACTIVE_SLOT = "slot"
         const val UNINSTALL = "uninstall"
     }

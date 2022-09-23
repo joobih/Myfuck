@@ -10,7 +10,7 @@ using namespace std;
 #define SYSTEM_CON  "u:object_r:system_file:s0"
 #define ADB_CON     "u:object_r:adb_data_file:s0"
 #define ROOT_CON    "u:object_r:rootfs:s0"
-#define MAGISK_CON  "u:object_r:" SEPOL_FILE_TYPE ":s0"
+#define MYFUCK_CON  "u:object_r:" SEPOL_FILE_TYPE ":s0"
 #define EXEC_CON    "u:object_r:" SEPOL_EXEC_TYPE ":s0"
 
 static void restore_syscon(int dirfd) {
@@ -49,7 +49,7 @@ static void restore_myfuckcon(int dirfd) {
     struct dirent *entry;
     DIR *dir;
 
-    fsetfilecon(dirfd, MAGISK_CON);
+    fsetfilecon(dirfd, MYFUCK_CON);
     fchown(dirfd, 0, 0);
 
     dir = xfdopendir(dirfd);
@@ -58,7 +58,7 @@ static void restore_myfuckcon(int dirfd) {
         if (entry->d_type == DT_DIR) {
             restore_myfuckcon(fd);
         } else if (entry->d_type) {
-            fsetfilecon(fd, MAGISK_CON);
+            fsetfilecon(fd, MYFUCK_CON);
             fchown(fd, 0, 0);
         }
         close(fd);
@@ -80,26 +80,26 @@ void restorecon() {
 }
 
 void restore_tmpcon() {
-    if (MAGISKTMP == "/system/bin") {
+    if (MYFUCKTMP == "/system/bin") {
         // Running with emulator.sh
         if (SDK_INT >= 26)
             lsetfilecon("/system/bin/myfuck", EXEC_CON);
         return;
     }
 
-    if (MAGISKTMP == "/sbin")
-        setfilecon(MAGISKTMP.data(), ROOT_CON);
+    if (MYFUCKTMP == "/sbin")
+        setfilecon(MYFUCKTMP.data(), ROOT_CON);
     else
-        chmod(MAGISKTMP.data(), 0700);
+        chmod(MYFUCKTMP.data(), 0700);
 
-    auto dir = xopen_dir(MAGISKTMP.data());
+    auto dir = xopen_dir(MYFUCKTMP.data());
     int dfd = dirfd(dir.get());
 
     for (dirent *entry; (entry = xreaddir(dir.get()));)
         setfilecon_at(dfd, entry->d_name, SYSTEM_CON);
 
     if (SDK_INT >= 26) {
-        string myfuck = MAGISKTMP + "/myfuck";
+        string myfuck = MYFUCKTMP + "/myfuck";
         setfilecon(myfuck.data(), EXEC_CON);
     }
 }

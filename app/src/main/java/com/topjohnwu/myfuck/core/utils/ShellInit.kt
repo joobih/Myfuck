@@ -44,7 +44,7 @@ class BusyBoxInit : BaseShellInit() {
             }
 
             if (shell.isRoot) {
-                add("export MAGISKTMP=\$(myfuck --path)/.myfuck")
+                add("export MYFUCKTMP=\$(myfuck --path)/.myfuck")
                 // Test if we can properly execute stuff in /data
                 Info.noDataExec = !shell.newJob().add("$localBB true").exec().isSuccess
             }
@@ -52,9 +52,9 @@ class BusyBoxInit : BaseShellInit() {
             if (Info.noDataExec) {
                 // Copy it out of /data to workaround Samsung bullshit
                 add(
-                    "if [ -x \$MAGISKTMP/busybox/busybox ]; then",
-                    "  cp -af $localBB \$MAGISKTMP/busybox/busybox",
-                    "  exec \$MAGISKTMP/busybox/busybox sh",
+                    "if [ -x \$MYFUCKTMP/busybox/busybox ]; then",
+                    "  cp -af $localBB \$MYFUCKTMP/busybox/busybox",
+                    "  exec \$MYFUCKTMP/busybox/busybox sh",
                     "else",
                     "  cp -af $localBB /dev/.busybox",
                     "  exec /dev/.busybox sh",
@@ -85,7 +85,7 @@ class AppShellInit : BaseShellInit() {
             add("app_init")
         }.exec()
 
-        Const.MAGISKTMP = getVar("MAGISKTMP")
+        Const.MYFUCKTMP = getVar("MYFUCKTMP")
         Info.isSAR = getBool("SYSTEM_ROOT")
         Info.ramdisk = getBool("RAMDISKEXIST")
         Info.isAB = getBool("ISAB")

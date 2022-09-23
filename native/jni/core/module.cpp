@@ -515,7 +515,7 @@ public:
                 xsymlink("./myfuckinit", dest.data());
             }
         }
-        create_and_mount(MAGISKTMP + "/" + name());
+        create_and_mount(MYFUCKTMP + "/" + name());
     }
 };
 
@@ -538,8 +538,8 @@ static void inject_myfuck_bins(root_node *system) {
 }
 
 void magic_mount() {
-    node_entry::mirror_dir = MAGISKTMP + "/" MIRRDIR;
-    node_entry::module_mnt = MAGISKTMP + "/" MODULEMNT "/";
+    node_entry::mirror_dir = MYFUCKTMP + "/" MIRRDIR;
+    node_entry::module_mnt = MYFUCKTMP + "/" MODULEMNT "/";
 
     auto root = make_unique<root_node>("");
     auto system = new root_node("system");
@@ -549,7 +549,7 @@ void magic_mount() {
     LOGI("* Loading modules\n");
     for (const auto &m : module_list) {
         auto module = m.data();
-        char *b = buf + sprintf(buf, "%s/" MODULEMNT "/%s/", MAGISKTMP.data(), module);
+        char *b = buf + sprintf(buf, "%s/" MODULEMNT "/%s/", MYFUCKTMP.data(), module);
 
         // Read props
         strcpy(b, "system.prop");
@@ -575,7 +575,7 @@ void magic_mount() {
         close(fd);
     }
 
-    if (MAGISKTMP != "/sbin") {
+    if (MYFUCKTMP != "/sbin") {
         // Need to inject our binaries into /system/bin
         inject_myfuck_bins(system);
     }
@@ -624,8 +624,8 @@ static void prepare_modules() {
     }
 
     // Setup module mount (workaround nosuid selabel issue)
-    auto src = MAGISKTMP + "/" MIRRDIR MODULEROOT;
-    auto dest = MAGISKTMP + "/" MODULEMNT;
+    auto src = MYFUCKTMP + "/" MIRRDIR MODULEROOT;
+    auto dest = MYFUCKTMP + "/" MODULEMNT;
     xmkdir(dest.data(), 0755);
     bind_mount(src.data(), dest.data());
 

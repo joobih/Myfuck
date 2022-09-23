@@ -1,4 +1,4 @@
-#MAGISK
+#MYFUCK
 ############################################
 # Myfuck Flash Script (updater-script)
 ############################################
@@ -29,10 +29,10 @@ setup_flashable
 # Detection
 ############
 
-if echo $MAGISK_VER | grep -q '\.'; then
-  PRETTY_VER=$MAGISK_VER
+if echo $MYFUCK_VER | grep -q '\.'; then
+  PRETTY_VER=$MYFUCK_VER
 else
-  PRETTY_VER="$MAGISK_VER($MAGISK_VER_CODE)"
+  PRETTY_VER="$MYFUCK_VER($MYFUCK_VER_CODE)"
 fi
 print_title "Myfuck $PRETTY_VER Installer"
 
@@ -69,10 +69,10 @@ $BOOTMODE || remove_system_su
 ui_print "- Constructing environment"
 
 # Copy required files
-rm -rf $MAGISKBIN/* 2>/dev/null
-mkdir -p $MAGISKBIN 2>/dev/null
-cp -af $BINDIR/. $COMMONDIR/. $BBBIN $MAGISKBIN
-chmod -R 755 $MAGISKBIN
+rm -rf $MYFUCKBIN/* 2>/dev/null
+mkdir -p $MYFUCKBIN 2>/dev/null
+cp -af $BINDIR/. $COMMONDIR/. $BBBIN $MYFUCKBIN
+chmod -R 755 $MYFUCKBIN
 
 # addon.d
 if [ -d /system/addon.d ]; then

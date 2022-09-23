@@ -10,11 +10,11 @@
 #define MODULEROOT      SECURE_DIR "/modules"
 #define MODULEUPGRADE   SECURE_DIR "/modules_update"
 #define DATABIN         SECURE_DIR "/myfuck"
-#define MAGISKDB        SECURE_DIR "/myfuck.db"
+#define MYFUCKDB        SECURE_DIR "/myfuck.db"
 #define MANAGERAPK      DATABIN "/myfuck.apk"
 
 // tmpfs paths
-extern std::string  MAGISKTMP;
+extern std::string  MYFUCKTMP;
 #define INTLROOT    ".myfuck"
 #define MIRRDIR     INTLROOT "/mirror"
 #define RULESDIR    MIRRDIR "/sepolicy.rules"

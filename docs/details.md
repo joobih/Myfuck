@@ -12,10 +12,10 @@ Myfuck will mount a `tmpfs` directory to store some temporary data. For devices 
 # Binaries like myfuck, myfuckinit, and all symlinks to
 # applets are directly stored in this path. This means when
 # this is /sbin, these binaries will be directly in PATH.
-MAGISKPATH=$(myfuck --path)
+MYFUCKPATH=$(myfuck --path)
 
 # Myfuck internal stuffs
-MAGISKTMP=$MAGISKBASE/.myfuck
+MYFUCKTMP=$MYFUCKBASE/.myfuck
 
 # Myfuck's BusyBox directory. Within this folder stores
 # the busybox binary and symlinks to all of its applets.
@@ -23,28 +23,28 @@ MAGISKTMP=$MAGISKBASE/.myfuck
 # directly call /data/adb/myfuck/busybox and use
 # BusyBox's ASH Standalone mode.
 # The creation of this path will be removed in the future.
-$MAGISKTMP/busybox
+$MYFUCKTMP/busybox
 
 # /data/adb/modules will be bind mounted here.
 # The original folder is not used due to nosuid mount flag.
-$MAGISKTMP/modules
+$MYFUCKTMP/modules
 
 # The current Myfuck installation config
-$MAGISKTMP/config
+$MYFUCKTMP/config
 
 # Partition mirrors
 # Each directory in this path will be mounted with the
 # partition of its directory name.
 # e.g. system, system_ext, vendor, data ...
-$MAGISKTMP/mirror
+$MYFUCKTMP/mirror
 
 # Block devices Myfuck creates internally to mount mirrors.
-$MAGISKTMP/block
+$MYFUCKTMP/block
 
 # Root directory patch files
 # On system-as-root devices, / is not writable.
 # All pre-init patched files are stored here and bind mounted.
-$MAGISKTMP/rootdir
+$MYFUCKTMP/rootdir
 ```
 
 ### Paths in `/data`
@@ -75,7 +75,7 @@ $SECURE_DIR/modules
 $SECURE_DIR/modules_update
 
 # Database storing settings and root permissions
-MAGISKDB=$SECURE_DIR/myfuck.db
+MYFUCKDB=$SECURE_DIR/myfuck.db
 
 # All myfuck related binaries, including busybox,
 # scripts, and myfuck binaries. Used in supporting

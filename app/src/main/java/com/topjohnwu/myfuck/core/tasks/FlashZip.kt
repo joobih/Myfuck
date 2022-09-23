@@ -50,7 +50,7 @@ open class FlashZip(
         val isValid = runCatching {
             zipFile.unzip(installDir, "META-INF/com/google/android", true)
             val script = File(installDir, "updater-script")
-            script.readText().contains("#MAGISK")
+            script.readText().contains("#MYFUCK")
         }.getOrElse {
             console.add("! Unzip error")
             throw it

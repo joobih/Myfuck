@@ -300,12 +300,12 @@ def build_binary(args):
 
     # Basic flags
     global base_flags
-    base_flags = f'MAGISK_VERSION={config["version"]} MAGISK_VER_CODE={config["versionCode"]}'
+    base_flags = f'MYFUCK_VERSION={config["version"]} MYFUCK_VER_CODE={config["versionCode"]}'
     if not args.release:
-        base_flags += ' MAGISK_DEBUG=1'
+        base_flags += ' MYFUCK_DEBUG=1'
 
     if 'myfuck' in args.target:
-        run_ndk_build('B_MAGISK=1 B_64BIT=1')
+        run_ndk_build('B_MYFUCK=1 B_64BIT=1')
         clean_elf()
 
     if 'test' in args.target:

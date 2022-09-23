@@ -249,9 +249,9 @@ static bool init_list() {
     // Add SafetyNet by default
     add_hide_set(GMS_PKG, SNET_PROC);
 
-    // We also need to hide the default GMS process if MAGISKTMP != /sbin
+    // We also need to hide the default GMS process if MYFUCKTMP != /sbin
     // The snet process communicates with the main process and get additional info
-    if (MAGISKTMP != "/sbin")
+    if (MYFUCKTMP != "/sbin")
         add_hide_set(GMS_PKG, GMS_PKG);
 
     return true;

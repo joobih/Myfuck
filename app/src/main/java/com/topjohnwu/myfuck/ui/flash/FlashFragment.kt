@@ -88,7 +88,7 @@ class FlashFragment : BaseUIFragment<FlashViewModel, FragmentFlashMd2Binding>() 
                 .createPendingIntent()
 
         private fun flashType(isSecondSlot: Boolean) =
-            if (isSecondSlot) Const.Value.FLASH_INACTIVE_SLOT else Const.Value.FLASH_MAGISK
+            if (isSecondSlot) Const.Value.FLASH_INACTIVE_SLOT else Const.Value.FLASH_MYFUCK
 
         /* Flashing is understood as installing / flashing myfuck itself */
 

@@ -23,7 +23,7 @@ fun InputStream.toModule(file: Uri, installer: InputStream) {
         installer.copyTo(zout)
 
         zout.putNextEntry(ZipEntry("META-INF/com/google/android/updater-script"))
-        zout.write("#MAGISK\n".toByteArray(charset("UTF-8")))
+        zout.write("#MYFUCK\n".toByteArray(charset("UTF-8")))
 
         var off = -1
         zin.forEach { entry ->

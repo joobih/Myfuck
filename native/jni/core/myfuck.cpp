@@ -51,7 +51,7 @@ int myfuck_main(int argc, char *argv[]) {
     if (argc < 2)
         usage();
     if (argv[1] == "-c"sv) {
-        printf(MAGISK_VERSION ":MAGISK (" str(MAGISK_VER_CODE) ")\n");
+        printf(MYFUCK_VERSION ":MYFUCK (" str(MYFUCK_VER_CODE) ")\n");
         return 0;
     } else if (argv[1] == "-v"sv) {
         int fd = connect_daemon();

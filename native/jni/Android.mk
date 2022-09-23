@@ -7,7 +7,7 @@ LOCAL_PATH := $(call my-dir)
 # Global toggle for the WIP zygote injection features
 ENABLE_INJECT := 0
 
-ifdef B_MAGISK
+ifdef B_MYFUCK
 
 include $(CLEAR_VARS)
 LOCAL_MODULE := myfuck

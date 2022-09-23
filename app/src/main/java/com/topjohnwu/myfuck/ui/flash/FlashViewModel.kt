@@ -63,7 +63,7 @@ class FlashViewModel : BaseViewModel() {
                     showReboot = false
                     MyfuckInstaller.Uninstall(outItems, logItems).exec()
                 }
-                Const.Value.FLASH_MAGISK -> {
+                Const.Value.FLASH_MYFUCK -> {
                     if (Info.isEmulator)
                         MyfuckInstaller.Emulator(outItems, logItems).exec()
                     else

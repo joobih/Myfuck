@@ -1,4 +1,4 @@
-#MAGISK
+#MYFUCK
 ############################################
 # Myfuck Uninstaller (updater-script)
 ############################################
@@ -29,10 +29,10 @@ setup_flashable
 # Detection
 ############
 
-if echo $MAGISK_VER | grep -q '\.'; then
-  PRETTY_VER=$MAGISK_VER
+if echo $MYFUCK_VER | grep -q '\.'; then
+  PRETTY_VER=$MYFUCK_VER
 else
-  PRETTY_VER="$MAGISK_VER($MAGISK_VER_CODE)"
+  PRETTY_VER="$MYFUCK_VER($MYFUCK_VER_CODE)"
 fi
 print_title "Myfuck $PRETTY_VER Uninstaller"
 

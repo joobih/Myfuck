@@ -33,11 +33,11 @@ class UpdateCheckService(context: Context, workerParams: WorkerParameters)
                     .setConstraints(constraints)
                     .build()
                 WorkManager.getInstance(context).enqueueUniquePeriodicWork(
-                    Const.ID.CHECK_MAGISK_UPDATE_WORKER_ID,
+                    Const.ID.CHECK_MYFUCK_UPDATE_WORKER_ID,
                     ExistingPeriodicWorkPolicy.REPLACE, request)
             } else {
                 WorkManager.getInstance(context)
-                    .cancelUniqueWork(Const.ID.CHECK_MAGISK_UPDATE_WORKER_ID)
+                    .cancelUniqueWork(Const.ID.CHECK_MYFUCK_UPDATE_WORKER_ID)
             }
         }
     }
