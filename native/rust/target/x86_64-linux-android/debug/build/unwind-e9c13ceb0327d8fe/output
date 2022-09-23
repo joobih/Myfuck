@@ -1,0 +1,12 @@
+cargo:rerun-if-changed=build.rs
+TARGET = Some("x86_64-linux-android")
+HOST = Some("x86_64-apple-darwin")
+CC_x86_64-linux-android = None
+CC_x86_64_linux_android = None
+TARGET_CC = Some("/Users/cuijun/Library/Android/sdk/ndk/magisk/toolchains/llvm/prebuilt/darwin-x86_64/bin/clang")
+CFLAGS_x86_64-linux-android = None
+CFLAGS_x86_64_linux_android = None
+TARGET_CFLAGS = Some("--target=x86_64-linux-android21")
+CRATE_CC_NO_DEFAULTS = None
+cargo:rustc-link-lib=unwind
+cargo:rustc-link-lib=dl
