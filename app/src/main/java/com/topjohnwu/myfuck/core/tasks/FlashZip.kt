@@ -3,10 +3,10 @@ package com.topjohnwu.myfuck.core.tasks
 import android.net.Uri
 import androidx.core.net.toFile
 import com.topjohnwu.myfuck.core.Const
+import com.topjohnwu.myfuck.core.di.AppContext
 import com.topjohnwu.myfuck.core.utils.MediaStoreUtils.displayName
 import com.topjohnwu.myfuck.core.utils.MediaStoreUtils.inputStream
 import com.topjohnwu.myfuck.core.utils.unzip
-import com.topjohnwu.myfuck.di.AppContext
 import com.topjohnwu.myfuck.ktx.writeTo
 import com.topjohnwu.superuser.Shell
 import kotlinx.coroutines.Dispatchers
@@ -63,7 +63,7 @@ open class FlashZip(
 
         console.add("- Installing ${mUri.displayName}")
 
-        return Shell.su("sh $installDir/update-binary dummy 1 \'$zipFile\'")
+        return Shell.cmd("sh $installDir/update-binary dummy 1 \'$zipFile\'")
             .to(console, logs).exec().isSuccess
     }
 
@@ -79,7 +79,7 @@ open class FlashZip(
             Timber.e(e)
             false
         } finally {
-            Shell.su("cd /", "rm -rf $installDir ${Const.TMPDIR}").submit()
+            Shell.cmd("cd /", "rm -rf $installDir ${Const.TMPDIR}").submit()
         }
     }
 }

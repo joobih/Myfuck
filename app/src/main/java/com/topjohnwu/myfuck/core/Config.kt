@@ -6,21 +6,23 @@ import android.util.Xml
 import androidx.appcompat.app.AppCompatDelegate
 import androidx.core.content.edit
 import com.topjohnwu.myfuck.BuildConfig
-import com.topjohnwu.myfuck.core.utils.BiometricHelper
+import com.topjohnwu.myfuck.core.di.ServiceLocator
+import com.topjohnwu.myfuck.core.repository.BoolDBPropertyNoWrite
+import com.topjohnwu.myfuck.core.repository.DBConfig
+import com.topjohnwu.myfuck.core.repository.PreferenceConfig
 import com.topjohnwu.myfuck.core.utils.refreshLocale
-import com.topjohnwu.myfuck.data.preference.PreferenceModel
-import com.topjohnwu.myfuck.data.repository.DBConfig
-import com.topjohnwu.myfuck.di.ServiceLocator
 import com.topjohnwu.myfuck.ui.theme.Theme
+import kotlinx.coroutines.GlobalScope
 import org.xmlpull.v1.XmlPullParser
 import java.io.File
 import java.io.InputStream
 
-object Config : PreferenceModel, DBConfig {
+object Config : PreferenceConfig, DBConfig {
 
     override val stringDB get() = ServiceLocator.stringDB
     override val settingsDB get() = ServiceLocator.settingsDB
     override val context get() = ServiceLocator.deContext
+    override val coroutineScope get() = GlobalScope
 
     @get:SuppressLint("ApplySharedPref")
     val prefsFile: File get() {
@@ -37,6 +39,8 @@ object Config : PreferenceModel, DBConfig {
         const val SU_MULTIUSER_MODE = "multiuser_mode"
         const val SU_MNT_NS = "mnt_ns"
         const val SU_BIOMETRIC = "su_biometric"
+        const val ZYGISK = "zygisk"
+        const val DENYLIST = "denylist"
         const val SU_MANAGER = "requester"
         const val KEYSTORE = "keystore"
 
@@ -59,9 +63,6 @@ object Config : PreferenceModel, DBConfig {
         const val BOOT_ID = "boot_id"
         const val ASKED_HOME = "asked_home"
         const val DOH = "doh"
-
-        // system state
-        const val MYFUCKHIDE = "myfuckhide"
     }
 
     object Value {
@@ -71,6 +72,7 @@ object Config : PreferenceModel, DBConfig {
         const val BETA_CHANNEL = 1
         const val CUSTOM_CHANNEL = 2
         const val CANARY_CHANNEL = 3
+        const val DEBUG_CHANNEL = 4
 
         // root access mode
         const val ROOT_ACCESS_DISABLED = 0
@@ -107,13 +109,16 @@ object Config : PreferenceModel, DBConfig {
 
     private val defaultChannel =
         if (BuildConfig.DEBUG)
+            Value.DEBUG_CHANNEL
+        else if (Const.APP_IS_CANARY)
             Value.CANARY_CHANNEL
         else
             Value.DEFAULT_CHANNEL
 
-    @JvmStatic var keepVerity = false
-    @JvmStatic var keepEnc = false
-    @JvmStatic var recovery = false
+    @JvmField var keepVerity = false
+    @JvmField var keepEnc = false
+    @JvmField var patchVbmeta = false
+    @JvmField var recovery = false
 
     var bootId by preference(Key.BOOT_ID, "")
     var askedHome by preference(Key.ASKED_HOME, false)
@@ -133,7 +138,6 @@ object Config : PreferenceModel, DBConfig {
     var suTapjack by preference(Key.SU_TAPJACK, true)
     var checkUpdate by preference(Key.CHECK_UPDATES, true)
     var doh by preference(Key.DOH, false)
-    var myfuckHide by preference(Key.MYFUCKHIDE, true)
     var showSystemApp by preference(Key.SHOW_SYSTEM_APP, false)
 
     var customChannelUrl by preference(Key.CUSTOM_CHANNEL, "")
@@ -149,6 +153,8 @@ object Config : PreferenceModel, DBConfig {
     var suMntNamespaceMode by dbSettings(Key.SU_MNT_NS, Value.NAMESPACE_MODE_REQUESTER)
     var suMultiuserMode by dbSettings(Key.SU_MULTIUSER_MODE, Value.MULTIUSER_MODE_OWNER_ONLY)
     var suBiometric by dbSettings(Key.SU_BIOMETRIC, false)
+    var zygisk by dbSettings(Key.ZYGISK, false)
+    var denyList by BoolDBPropertyNoWrite(Key.DENYLIST, false)
     var suManager by dbStrings(Key.SU_MANAGER, "", true)
     var keyStoreRaw by dbStrings(Key.KEYSTORE, "", true)
 
@@ -157,7 +163,7 @@ object Config : PreferenceModel, DBConfig {
     fun load(pkg: String?) {
         // Only try to load prefs when fresh install and a previous package name is set
         if (pkg != null && prefs.all.isEmpty()) runCatching {
-            context.contentResolver.openInputStream(Provider.PREFS_URI(pkg))?.use {
+            context.contentResolver.openInputStream(Provider.preferencesUri(pkg))?.use {
                 prefs.edit { parsePrefs(it) }
             }
         }
@@ -168,17 +174,12 @@ object Config : PreferenceModel, DBConfig {
                 suBiometric = true
             remove(SU_FINGERPRINT)
             prefs.getString(Key.UPDATE_CHANNEL, null).also {
-                if (it == null)
+                if (it == null ||
+                    it.toInt() > Value.DEBUG_CHANNEL ||
+                    it.toInt() < Value.DEFAULT_CHANNEL) {
                     putString(Key.UPDATE_CHANNEL, defaultChannel.toString())
-                else if (it.toInt() > Value.CANARY_CHANNEL)
-                    putString(Key.UPDATE_CHANNEL, Value.CANARY_CHANNEL.toString())
+                }
             }
-
-            // Write database configs
-            putString(Key.ROOT_ACCESS, rootMode.toString())
-            putString(Key.SU_MNT_NS, suMntNamespaceMode.toString())
-            putString(Key.SU_MULTIUSER_MODE, suMultiuserMode.toString())
-            putBoolean(Key.SU_BIOMETRIC, BiometricHelper.isEnabled)
         }
     }
 

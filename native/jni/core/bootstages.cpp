@@ -8,7 +8,7 @@
 
 #include <myfuck.hpp>
 #include <db.hpp>
-#include <utils.hpp>
+#include <base.hpp>
 #include <daemon.hpp>
 #include <resetprop.hpp>
 #include <selinux.hpp>
@@ -18,28 +18,43 @@
 using namespace std;
 
 static bool safe_mode = false;
+bool zygisk_enabled = false;
 
 /*********
  * Setup *
  *********/
 
-#define MNT_DIR_IS(dir)   (me->mnt_dir == string_view(dir))
-#define SETMIR(b, part)   sprintf(b, "%s/" MIRRDIR "/" #part, MYFUCKTMP.data())
-#define SETBLK(b, part)   sprintf(b, "%s/" BLOCKDIR "/" #part, MYFUCKTMP.data())
+#define MNT_DIR_IS(dir) (me->mnt_dir == string_view(dir))
+#define MNT_TYPE_IS(type) (me->mnt_type == string_view(type))
+#define SETMIR(b, part) snprintf(b, sizeof(b), "%s/" MIRRDIR "/" #part, MYFUCKTMP.data())
+#define SETBLK(b, part) snprintf(b, sizeof(b), "%s/" BLOCKDIR "/" #part, MYFUCKTMP.data())
 
-#define do_mount_mirror(part, flag) {\
-    SETMIR(buf1, part); \
-    SETBLK(buf2, part); \
-    unlink(buf2); \
+#define do_mount_mirror(part) {     \
+    SETMIR(buf1, part);             \
+    SETBLK(buf2, part);             \
+    unlink(buf2);                   \
     mknod(buf2, S_IFBLK | 0600, st.st_dev); \
-    xmkdir(buf1, 0755); \
-    xmount(buf2, buf1, me->mnt_type, flag, nullptr); \
-    LOGI("mount: %s\n", buf1); \
+    xmkdir(buf1, 0755);             \
+    int flags = 0;                  \
+    auto opts = split_ro(me->mnt_opts, ",");\
+    for (string_view s : opts) {    \
+        if (s == "ro") {            \
+            flags |= MS_RDONLY;     \
+            break;                  \
+        }                           \
+    }                               \
+    xmount(buf2, buf1, me->mnt_type, flags, nullptr); \
+    LOGI("mount: %s\n", buf1);      \
 }
 
-#define mount_mirror(part, flag) \
-else if (MNT_DIR_IS("/" #part) && me->mnt_type != "tmpfs"sv && lstat(me->mnt_dir, &st) == 0) \
-    do_mount_mirror(part, flag)
+#define mount_mirror(part) \
+if (MNT_DIR_IS("/" #part)  \
+    && !MNT_TYPE_IS("tmpfs") \
+    && !MNT_TYPE_IS("overlay") \
+    && lstat(me->mnt_dir, &st) == 0) { \
+    do_mount_mirror(part); \
+    break;                 \
+}
 
 #define link_mirror(part) \
 SETMIR(buf1, part); \
@@ -49,11 +64,12 @@ if (access("/system/" #part, F_OK) == 0 && access(buf1, F_OK) != 0) { \
 }
 
 #define link_orig_dir(dir, part) \
-else if (MNT_DIR_IS(dir) && me->mnt_type != "tmpfs"sv) { \
-    SETMIR(buf1, part); \
-    rmdir(buf1); \
-    xsymlink(dir, buf1); \
-    LOGI("link: %s\n", buf1); \
+if (MNT_DIR_IS(dir) && !MNT_TYPE_IS("tmpfs") && !MNT_TYPE_IS("overlay")) { \
+    SETMIR(buf1, part);          \
+    rmdir(buf1);                 \
+    xsymlink(dir, buf1);         \
+    LOGI("link: %s\n", buf1);    \
+    break;                       \
 }
 
 #define link_orig(part) link_orig_dir("/" #part, part)
@@ -65,20 +81,22 @@ static void mount_mirrors() {
     LOGI("* Mounting mirrors\n");
 
     parse_mnt("/proc/mounts", [&](mntent *me) {
-        struct stat st;
-        if (0) {}
-        mount_mirror(system, MS_RDONLY)
-        mount_mirror(vendor, MS_RDONLY)
-        mount_mirror(product, MS_RDONLY)
-        mount_mirror(system_ext, MS_RDONLY)
-        mount_mirror(data, 0)
-        link_orig(cache)
-        link_orig(metadata)
-        link_orig(persist)
-        link_orig_dir("/mnt/vendor/persist", persist)
-        else if (SDK_INT >= 24 && MNT_DIR_IS("/proc") && !strstr(me->mnt_opts, "hidepid=2")) {
-            xmount(nullptr, "/proc", nullptr, MS_REMOUNT, "hidepid=2,gid=3009");
-        }
+        struct stat st{};
+        do {
+            mount_mirror(system)
+            mount_mirror(vendor)
+            mount_mirror(product)
+            mount_mirror(system_ext)
+            mount_mirror(data)
+            link_orig(cache)
+            link_orig(metadata)
+            link_orig(persist)
+            link_orig_dir("/mnt/vendor/persist", persist)
+            if (SDK_INT >= 24 && MNT_DIR_IS("/proc") && !strstr(me->mnt_opts, "hidepid=2")) {
+                xmount(nullptr, "/proc", nullptr, MS_REMOUNT, "hidepid=2,gid=3009");
+                break;
+            }
+        } while (false);
         return true;
     });
     SETMIR(buf1, system);
@@ -88,7 +106,7 @@ static void mount_mirrors() {
         parse_mnt("/proc/mounts", [&](mntent *me) {
             struct stat st;
             if (MNT_DIR_IS("/") && me->mnt_type != "rootfs"sv && stat("/", &st) == 0) {
-                do_mount_mirror(system_root, MS_RDONLY)
+                do_mount_mirror(system_root)
                 return false;
             }
             return true;
@@ -104,15 +122,17 @@ static bool myfuck_env() {
 
     LOGI("* Initializing Myfuck environment\n");
 
+    preserve_stub_apk();
     string pkg;
-    check_manager(&pkg);
+    get_manager(0, &pkg);
 
-    sprintf(buf, "%s/0/%s/install", APP_DATA_DIR, pkg.data());
+    sprintf(buf, "%s/0/%s/install", APP_DATA_DIR,
+            pkg.empty() ? "xxx" /* Ensure non-exist path */ : pkg.data());
 
     // Alternative binaries paths
     const char *alt_bin[] = { "/cache/data_adb/myfuck", "/data/myfuck", buf };
     for (auto alt : alt_bin) {
-        struct stat st;
+        struct stat st{};
         if (lstat(alt, &st) == 0) {
             if (S_ISLNK(st.st_mode)) {
                 unlink(alt);
@@ -124,15 +144,7 @@ static bool myfuck_env() {
             break;
         }
     }
-
-    // Remove stuffs
     rm_rf("/cache/data_adb");
-    rm_rf("/data/adb/modules/.core");
-    unlink("/data/adb/myfuck.img");
-    unlink("/data/adb/myfuck_merge.img");
-    unlink("/data/myfuck.img");
-    unlink("/data/myfuck_merge.img");
-    unlink("/data/myfuck_debug.log");
 
     // Directories in /data/adb
     xmkdir(DATABIN, 0755);
@@ -147,6 +159,11 @@ static bool myfuck_env() {
     mkdir(dirname(buf), 0755);
     cp_afc(DATABIN "/busybox", buf);
     exec_command_async(buf, "--install", "-s", dirname(buf));
+
+    if (access(DATABIN "/myfuckpolicy", X_OK) == 0) {
+        sprintf(buf, "%s/myfuckpolicy", MYFUCKTMP.data());
+        cp_afc(DATABIN "/myfuckpolicy", buf);
+    }
 
     return true;
 }
@@ -171,7 +188,7 @@ static bool check_data() {
         return false;
     auto crypto = getprop("ro.crypto.state");
     if (!crypto.empty()) {
-        if (crypto == "unencrypted") {
+        if (crypto != "encrypted") {
             // Unencrypted, we can directly access data
             return true;
         } else {
@@ -254,10 +271,9 @@ static bool check_key_combo() {
  ***********************/
 
 static pthread_mutex_t stage_lock = PTHREAD_MUTEX_INITIALIZER;
+extern int disable_deny();
 
 void post_fs_data(int client) {
-    // ack
-    write_int(client, 0);
     close(client);
 
     mutex_guard lock(stage_lock);
@@ -275,6 +291,7 @@ void post_fs_data(int client) {
 
     unlock_blocks();
     mount_mirrors();
+    prune_su_access();
 
     if (access(SECURE_DIR, F_OK) != 0) {
         if (SDK_INT < 24) {
@@ -296,12 +313,15 @@ void post_fs_data(int client) {
 
     if (getprop("persist.sys.safemode", true) == "1" || check_key_combo()) {
         safe_mode = true;
-        // Disable all modules and myfuckhide so next boot will be clean
+        // Disable all modules and denylist so next boot will be clean
         disable_modules();
-        stop_myfuckhide();
+        disable_deny();
     } else {
         exec_common_scripts("post-fs-data");
-        auto_start_myfuckhide(false);
+        db_settings dbs;
+        get_db_settings(dbs, ZYGISK_CONFIG);
+        zygisk_enabled = dbs[ZYGISK_CONFIG];
+        initialize_denylist();
         handle_modules();
     }
 
@@ -315,8 +335,6 @@ unblock_init:
 }
 
 void late_start(int client) {
-    // ack
-    write_int(client, 0);
     close(client);
 
     mutex_guard lock(stage_lock);
@@ -333,15 +351,13 @@ void late_start(int client) {
 }
 
 void boot_complete(int client) {
-    // ack
-    write_int(client, 0);
     close(client);
 
     mutex_guard lock(stage_lock);
     DAEMON_STATE = STATE_BOOT_COMPLETE;
     setup_logfile(false);
 
-    LOGI("** boot_complete triggered\n");
+    LOGI("** boot-complete triggered\n");
 
     if (safe_mode)
         return;
@@ -350,20 +366,15 @@ void boot_complete(int client) {
     if (access(SECURE_DIR, F_OK) != 0)
         xmkdir(SECURE_DIR, 0700);
 
-    auto_start_myfuckhide(true);
+    // Ensure manager exists
+    check_pkg_refresh();
+    get_manager(0, nullptr, true);
+}
 
-    if (!check_manager()) {
-        if (access(MANAGERAPK, F_OK) == 0) {
-            // Only try to install APK when no manager is installed
-            // Myfuck Manager should be upgraded by itself, not through recovery installs
-            rename(MANAGERAPK, "/data/myfuck.apk");
-            install_apk("/data/myfuck.apk");
-        } else {
-            // Install stub
-            auto init = MYFUCKTMP + "/myfuckinit";
-            exec_command_sync(init.data(), "-x", "manager", "/data/myfuck.apk");
-            install_apk("/data/myfuck.apk");
-        }
-    }
-    unlink(MANAGERAPK);
+void zygote_restart(int client) {
+    close(client);
+
+    LOGI("** zygote restarted\n");
+    pkg_xml_ino = 0;
+    prune_su_access();
 }

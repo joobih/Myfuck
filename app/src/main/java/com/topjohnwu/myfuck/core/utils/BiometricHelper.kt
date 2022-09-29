@@ -6,7 +6,7 @@ import androidx.core.content.ContextCompat
 import androidx.fragment.app.FragmentActivity
 import com.topjohnwu.myfuck.R
 import com.topjohnwu.myfuck.core.Config
-import com.topjohnwu.myfuck.di.AppContext
+import com.topjohnwu.myfuck.core.di.AppContext
 
 object BiometricHelper {
 

@@ -2,15 +2,13 @@ package com.topjohnwu.myfuck.core.base
 
 import android.content.BroadcastReceiver
 import android.content.Context
-import android.content.ContextWrapper
 import android.content.Intent
-import com.topjohnwu.myfuck.core.wrap
+import androidx.annotation.CallSuper
+import com.topjohnwu.myfuck.core.patch
 
 abstract class BaseReceiver : BroadcastReceiver() {
-
-    final override fun onReceive(context: Context, intent: Intent?) {
-        onReceive(context.wrap() as ContextWrapper, intent)
+    @CallSuper
+    override fun onReceive(context: Context, intent: Intent?) {
+        context.patch()
     }
-
-    abstract fun onReceive(context: ContextWrapper, intent: Intent?)
 }

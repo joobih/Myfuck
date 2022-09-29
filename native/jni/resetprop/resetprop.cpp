@@ -4,16 +4,14 @@
 #include <map>
 
 #include <resetprop.hpp>
-#include <utils.hpp>
+#include <base.hpp>
 
 #define _REALLY_INCLUDE_SYS__SYSTEM_PROPERTIES_H_
 #include <_system_properties.h>
 
-#include "_resetprop.hpp"
+#include "prop.hpp"
 
 using namespace std;
-
-static bool verbose = false;
 
 #ifdef APPLET_STUB_MAIN
 #define system_property_set           __system_property_set
@@ -176,7 +174,7 @@ struct resetprop : public sysprop {
         // Always delete existing read-only properties, because they could be
         // long properties and cannot directly go through __system_property_update
         if (pi != nullptr && str_starts(name, "ro.")) {
-            delprop(name, false);
+            __system_property_delete(name, false /* Do NOT trim node */);
             pi = nullptr;
         }
 
@@ -228,7 +226,7 @@ struct resetprop : public sysprop {
             return 1;
         LOGD("resetprop: delete prop [%s]\n", name);
 
-        int ret = __system_property_delete(name);
+        int ret = __system_property_delete(name, true);
         if (persist && str_starts(name, "persist.")) {
             if (persist_deleteprop(name))
                 ret = 0;
@@ -240,7 +238,6 @@ struct resetprop : public sysprop {
 static sysprop_stub *get_impl() {
     static sysprop_stub *impl = nullptr;
     if (impl == nullptr) {
-        use_pb = access(PERSISTENT_PROPERTY_DIR "/persistent_properties", R_OK) == 0;
 #ifdef APPLET_STUB_MAIN
         if (__system_properties_init()) {
             LOGE("resetprop: __system_properties_init error\n");
@@ -297,10 +294,9 @@ void load_prop_file(const char *filename, bool prop_svc) {
 }
 
 int resetprop_main(int argc, char *argv[]) {
-    log_cb.d = [](auto fmt, auto ap) -> int { return verbose ? vfprintf(stderr, fmt, ap) : 0; };
-
     bool prop_svc = true;
     bool persist = false;
+    bool verbose = false;
     char *argv0 = argv[0];
 
     --argc;
@@ -339,6 +335,8 @@ int resetprop_main(int argc, char *argv[]) {
         --argc;
         ++argv;
     }
+
+    set_log_level_state(LogLevel::Debug, verbose);
 
     switch (argc) {
     case 0:

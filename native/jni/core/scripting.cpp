@@ -3,8 +3,9 @@
 #include <sys/wait.h>
 
 #include <myfuck.hpp>
-#include <utils.hpp>
+#include <base.hpp>
 #include <selinux.hpp>
+#include <daemon.hpp>
 
 #include "core.hpp"
 
@@ -24,6 +25,8 @@ static void set_script_env() {
     char new_path[4096];
     sprintf(new_path, "%s:%s", getenv("PATH"), MYFUCKTMP.data());
     setenv("PATH", new_path, 1);
+    if (zygisk_enabled)
+        setenv("ZYGISK_ENABLED", "1", 1);
 };
 
 void exec_script(const char *script) {
@@ -107,16 +110,15 @@ void exec_common_scripts(const char *stage) {
     PFS_DONE()
 }
 
-// Return if a > b
-static bool timespec_larger(timespec *a, timespec *b) {
-    if (a->tv_sec != b->tv_sec)
-        return a->tv_sec > b->tv_sec;
-    return a->tv_nsec > b->tv_nsec;
+static bool operator>(const timespec &a, const timespec &b) {
+    if (a.tv_sec != b.tv_sec)
+        return a.tv_sec > b.tv_sec;
+    return a.tv_nsec > b.tv_nsec;
 }
 
-void exec_module_scripts(const char *stage, const vector<string> &module_list) {
+void exec_module_scripts(const char *stage, const vector<string_view> &modules) {
     LOGI("* Running module %s scripts\n", stage);
-    if (module_list.empty())
+    if (modules.empty())
         return;
 
     bool pfs = stage == "post-fs-data"sv;
@@ -124,15 +126,15 @@ void exec_module_scripts(const char *stage, const vector<string> &module_list) {
         timespec now{};
         clock_gettime(CLOCK_MONOTONIC, &now);
         // If we had already timed out, treat it as service mode
-        if (timespec_larger(&now, &pfs_timeout))
+        if (now > pfs_timeout)
             pfs = false;
     }
     int timer_pid = -1;
     PFS_SETUP()
 
     char path[4096];
-    for (auto &m : module_list) {
-        const char* module = m.data();
+    for (auto &m : modules) {
+        const char *module = m.data();
         sprintf(path, MODULEROOT "/%s/%s.sh", module, stage);
         if (access(path, F_OK) == -1)
             continue;
@@ -150,8 +152,8 @@ void exec_module_scripts(const char *stage, const vector<string> &module_list) {
 
 constexpr char install_script[] = R"EOF(
 APK=%s
-log -t Myfuck "apk_install: $APK"
-log -t Myfuck "apk_install: $(pm install -r $APK 2>&1)"
+log -t Myfuck "pm_install: $APK"
+log -t Myfuck "pm_install: $(pm install -r $APK 2>&1)"
 rm -f $APK
 )EOF";
 
@@ -161,7 +163,38 @@ void install_apk(const char *apk) {
         .fork = fork_no_orphan
     };
     char cmds[sizeof(install_script) + 4096];
-    sprintf(cmds, install_script, apk);
+    snprintf(cmds, sizeof(cmds), install_script, apk);
+    exec_command_sync(exec, "/system/bin/sh", "-c", cmds);
+}
+
+constexpr char uninstall_script[] = R"EOF(
+PKG=%s
+log -t Myfuck "pm_uninstall: $PKG"
+log -t Myfuck "pm_uninstall: $(pm uninstall $PKG 2>&1)"
+)EOF";
+
+void uninstall_pkg(const char *pkg) {
+    exec_t exec {
+        .fork = fork_no_orphan
+    };
+    char cmds[sizeof(uninstall_script) + 256];
+    snprintf(cmds, sizeof(cmds), uninstall_script, pkg);
+    exec_command_sync(exec, "/system/bin/sh", "-c", cmds);
+}
+
+constexpr char clear_script[] = R"EOF(
+PKG=%s
+USER=%d
+log -t Myfuck "pm_clear: $PKG (user=$USER)"
+log -t Myfuck "pm_clear: $(pm clear --user $USER $PKG 2>&1)"
+)EOF";
+
+void clear_pkg(const char *pkg, int user_id) {
+    exec_t exec {
+        .fork = fork_no_orphan
+    };
+    char cmds[sizeof(clear_script) + 288];
+    snprintf(cmds, sizeof(cmds), clear_script, pkg, user_id);
     exec_command_sync(exec, "/system/bin/sh", "-c", cmds);
 }
 

@@ -1,24 +1,21 @@
 package com.topjohnwu.myfuck.core
 
 import android.os.Build
-import androidx.databinding.ObservableBoolean
-import com.topjohnwu.myfuck.DynAPK
+import androidx.lifecycle.LiveData
+import androidx.lifecycle.MutableLiveData
+import com.topjohnwu.myfuck.StubApk
+import com.topjohnwu.myfuck.core.di.AppContext
 import com.topjohnwu.myfuck.core.model.UpdateInfo
+import com.topjohnwu.myfuck.core.repository.NetworkService
 import com.topjohnwu.myfuck.core.utils.net.NetworkObserver
-import com.topjohnwu.myfuck.data.repository.NetworkService
-import com.topjohnwu.myfuck.di.AppContext
 import com.topjohnwu.myfuck.ktx.getProperty
-import com.topjohnwu.superuser.Shell
 import com.topjohnwu.superuser.ShellUtils.fastCmd
-import com.topjohnwu.superuser.internal.UiThreadHandler
-import java.io.File
-import java.io.IOException
 
 val isRunningAsStub get() = Info.stub != null
 
 object Info {
 
-    var stub: DynAPK.Data? = null
+    var stub: StubApk.Data? = null
 
     val EMPTY_REMOTE = UpdateInfo()
     var remote = EMPTY_REMOTE
@@ -31,59 +28,48 @@ object Info {
     // Device state
     @JvmStatic val env by lazy { loadState() }
     @JvmField var isSAR = false
-    @JvmField var isAB = false
-    @JvmField val isVirtualAB = getProperty("ro.virtual_ab.enabled", "false") == "true"
+    var isAB = false
+    @JvmField val isZygiskEnabled = System.getenv("ZYGISK_ENABLED") == "1"
     @JvmStatic val isFDE get() = crypto == "block"
     @JvmField var ramdisk = false
-    @JvmField var hasGMS = true
-    @JvmField val isPixel = Build.BRAND == "google"
-    @JvmField val isEmulator = getProperty("ro.kernel.qemu", "0") == "1"
+    @JvmField var vbmeta = false
     var crypto = ""
     var noDataExec = false
+    var isRooted = false
 
-    val isConnected by lazy {
-        ObservableBoolean(false).also { field ->
+    @JvmField var hasGMS = true
+    val isSamsung = Build.MANUFACTURER.equals("samsung", ignoreCase = true)
+    @JvmField val isEmulator =
+        getProperty("ro.kernel.qemu", "0") == "1" ||
+            getProperty("ro.boot.qemu", "0") == "1"
+
+    val isConnected: LiveData<Boolean> by lazy {
+        MutableLiveData(false).also { field ->
             NetworkObserver.observe(AppContext) {
-                UiThreadHandler.run { field.set(it) }
+                remote = EMPTY_REMOTE
+                field.postValue(it)
             }
         }
     }
 
-    val isNewReboot by lazy {
-        try {
-            val id = File("/proc/sys/kernel/random/boot_id").readText()
-            if (id != Config.bootId) {
-                Config.bootId = id
-                true
-            } else {
-                false
-            }
-        } catch (e: IOException) {
-            false
-        }
+    private fun loadState(): Env {
+        val v = fastCmd("myfuck -v").split(":".toRegex())
+        return Env(
+            v[0], v.size >= 3 && v[2] == "D",
+            runCatching { fastCmd("myfuck -V").toInt() }.getOrDefault(-1)
+        )
     }
-
-    private fun loadState() = Env(
-        fastCmd("myfuck -v").split(":".toRegex())[0],
-        runCatching { fastCmd("myfuck -V").toInt() }.getOrDefault(-1),
-        Shell.su("myfuckhide status").exec().isSuccess
-    )
 
     class Env(
-        val myfuckVersionString: String = "",
-        code: Int = -1,
-        hide: Boolean = false
+        val versionString: String = "",
+        val isDebug: Boolean = false,
+        code: Int = -1
     ) {
-        val myfuckHide get() = Config.myfuckHide
-        val myfuckVersionCode = when {
+        val versionCode = when {
             code < Const.Version.MIN_VERCODE -> -1
-            else -> if (Shell.rootAccess()) code else -1
+            else -> if (isRooted) code else -1
         }
         val isUnsupported = code > 0 && code < Const.Version.MIN_VERCODE
-        val isActive = myfuckVersionCode >= 0
-
-        init {
-            Config.myfuckHide = hide
-        }
+        val isActive = versionCode >= 0
     }
 }

@@ -4,15 +4,18 @@ LOCAL_PATH := $(call my-dir)
 # Binaries
 ########################
 
-# Global toggle for the WIP zygote injection features
-ENABLE_INJECT := 0
-
 ifdef B_MYFUCK
 
 include $(CLEAR_VARS)
 LOCAL_MODULE := myfuck
-LOCAL_STATIC_LIBRARIES := libnanopb libsystemproperties libutils
-LOCAL_C_INCLUDES := jni/include
+LOCAL_STATIC_LIBRARIES := \
+    libbase \
+    libnanopb \
+    libsystemproperties \
+    libphmap \
+    libxhook \
+    libmincrypt \
+    libmyfuck-rs
 
 LOCAL_SRC_FILES := \
     core/applets.cpp \
@@ -21,43 +24,53 @@ LOCAL_SRC_FILES := \
     core/bootstages.cpp \
     core/socket.cpp \
     core/db.cpp \
+    core/package.cpp \
+    core/cert.cpp \
     core/scripting.cpp \
     core/restorecon.cpp \
     core/module.cpp \
-    myfuckhide/myfuckhide.cpp \
-    myfuckhide/hide_utils.cpp \
-    myfuckhide/hide_policy.cpp \
-    resetprop/persist_properties.cpp \
+    core/logging.cpp \
+    core/thread.cpp \
+    resetprop/persist.cpp \
     resetprop/resetprop.cpp \
-    vigo/vigo.cpp \
-    vigo/connect.cpp \
-    vigo/pts.cpp \
-    vigo/su_daemon.cpp
+    su/su.cpp \
+    su/connect.cpp \
+    su/pts.cpp \
+    su/su_daemon.cpp \
+    zygisk/entry.cpp \
+    zygisk/main.cpp \
+    zygisk/utils.cpp \
+    zygisk/hook.cpp \
+    zygisk/memory.cpp \
+    zygisk/deny/cli.cpp \
+    zygisk/deny/utils.cpp \
+    zygisk/deny/revert.cpp
 
 LOCAL_LDLIBS := -llog
-LOCAL_CPPFLAGS := -DENABLE_INJECT=$(ENABLE_INJECT)
-
-ifeq ($(ENABLE_INJECT),1)
-LOCAL_STATIC_LIBRARIES += libxhook
-LOCAL_SRC_FILES += \
-    inject/entry.cpp \
-    inject/utils.cpp \
-    inject/hook.cpp
-else
-LOCAL_SRC_FILES += myfuckhide/proc_monitor.cpp
-endif
 
 include $(BUILD_EXECUTABLE)
 
 endif
 
+ifdef B_PRELOAD
+
 include $(CLEAR_VARS)
+LOCAL_MODULE := preload
+LOCAL_SRC_FILES := init/preload.c
+include $(BUILD_SHARED_LIBRARY)
+
+endif
 
 ifdef B_INIT
 
+include $(CLEAR_VARS)
 LOCAL_MODULE := myfuckinit
-LOCAL_STATIC_LIBRARIES := libsepol libxz libutils
-LOCAL_C_INCLUDES := jni/include out
+LOCAL_STATIC_LIBRARIES := \
+    libbase \
+    libcompat \
+    libpolicy \
+    libxz \
+    libinit-rs
 
 LOCAL_SRC_FILES := \
     init/init.cpp \
@@ -65,16 +78,8 @@ LOCAL_SRC_FILES := \
     init/rootdir.cpp \
     init/getinfo.cpp \
     init/twostage.cpp \
-    init/raw_data.cpp \
-    core/socket.cpp \
-    myfuckpolicy/sepolicy.cpp \
-    myfuckpolicy/myfuckpolicy.cpp \
-    myfuckpolicy/rules.cpp \
-    myfuckpolicy/policydb.cpp \
-    myfuckpolicy/statement.cpp \
-    myfuckboot/pattern.cpp
+    init/selinux.cpp
 
-LOCAL_LDFLAGS := -static
 include $(BUILD_EXECUTABLE)
 
 endif
@@ -83,21 +88,29 @@ ifdef B_BOOT
 
 include $(CLEAR_VARS)
 LOCAL_MODULE := myfuckboot
-LOCAL_STATIC_LIBRARIES := libmincrypt liblzma liblz4 libbz2 libfdt libutils libz
-LOCAL_C_INCLUDES := jni/include
+LOCAL_STATIC_LIBRARIES := \
+    libbase \
+    libcompat \
+    libmincrypt \
+    liblzma \
+    liblz4 \
+    libbz2 \
+    libfdt \
+    libz \
+    libzopfli \
+    libboot-rs
 
 LOCAL_SRC_FILES := \
-    myfuckboot/main.cpp \
-    myfuckboot/bootimg.cpp \
-    myfuckboot/hexpatch.cpp \
-    myfuckboot/compress.cpp \
-    myfuckboot/format.cpp \
-    myfuckboot/dtb.cpp \
-    myfuckboot/ramdisk.cpp \
-    myfuckboot/pattern.cpp \
-    utils/cpio.cpp
+    boot/main.cpp \
+    boot/bootimg.cpp \
+    boot/hexpatch.cpp \
+    boot/compress.cpp \
+    boot/format.cpp \
+    boot/dtb.cpp \
+    boot/ramdisk.cpp \
+    boot/pattern.cpp \
+    boot/cpio.cpp
 
-LOCAL_LDFLAGS := -static
 include $(BUILD_EXECUTABLE)
 
 endif
@@ -106,19 +119,14 @@ ifdef B_POLICY
 
 include $(CLEAR_VARS)
 LOCAL_MODULE := myfuckpolicy
-LOCAL_STATIC_LIBRARIES := libsepol libutils
-LOCAL_C_INCLUDES := jni/include
+LOCAL_STATIC_LIBRARIES := \
+    libbase \
+    libbase \
+    libpolicy \
+    libpolicy-rs
 
-LOCAL_SRC_FILES := \
-    core/applet_stub.cpp \
-    myfuckpolicy/sepolicy.cpp \
-    myfuckpolicy/myfuckpolicy.cpp \
-    myfuckpolicy/rules.cpp \
-    myfuckpolicy/policydb.cpp \
-    myfuckpolicy/statement.cpp
+LOCAL_SRC_FILES := sepolicy/main.cpp
 
-LOCAL_CFLAGS := -DAPPLET_STUB_MAIN=myfuckpolicy_main
-LOCAL_LDFLAGS := -static
 include $(BUILD_EXECUTABLE)
 
 endif
@@ -127,8 +135,12 @@ ifdef B_PROP
 
 include $(CLEAR_VARS)
 LOCAL_MODULE := resetprop
-LOCAL_STATIC_LIBRARIES := libnanopb libsystemproperties libutils
-LOCAL_C_INCLUDES := jni/include
+LOCAL_STATIC_LIBRARIES := \
+    libbase \
+    libcompat \
+    libnanopb \
+    libsystemproperties \
+    libmyfuck-rs
 
 LOCAL_SRC_FILES := \
     core/applet_stub.cpp \
@@ -136,7 +148,6 @@ LOCAL_SRC_FILES := \
     resetprop/resetprop.cpp \
 
 LOCAL_CFLAGS := -DAPPLET_STUB_MAIN=resetprop_main
-LOCAL_LDFLAGS := -static
 include $(BUILD_EXECUTABLE)
 
 endif
@@ -146,22 +157,41 @@ ifneq (,$(wildcard jni/test.cpp))
 
 include $(CLEAR_VARS)
 LOCAL_MODULE := test
-LOCAL_STATIC_LIBRARIES := libutils
-LOCAL_C_INCLUDES := jni/include
+LOCAL_STATIC_LIBRARIES := \
+    libbase \
+    libphmap
+
 LOCAL_SRC_FILES := test.cpp
 include $(BUILD_EXECUTABLE)
 
 endif
 endif
 
+########################
+# Libraries
+########################
+
+include $(CLEAR_VARS)
+LOCAL_MODULE := libpolicy
+LOCAL_STATIC_LIBRARIES := \
+    libbase \
+    libsepol
+LOCAL_C_INCLUDES := jni/sepolicy/include
+LOCAL_EXPORT_C_INCLUDES := $(LOCAL_C_INCLUDES)
+LOCAL_SRC_FILES := \
+    sepolicy/api.cpp \
+    sepolicy/sepolicy.cpp \
+    sepolicy/rules.cpp \
+    sepolicy/policydb.cpp \
+    sepolicy/statement.cpp
+include $(BUILD_STATIC_LIBRARY)
+
+include jni/Android-rs.mk
+include jni/base/Android.mk
+include jni/external/Android.mk
+
 ifdef B_BB
 
 include jni/external/busybox/Android.mk
 
 endif
-
-########################
-# Libraries
-########################
-include jni/utils/Android.mk
-include jni/external/Android.mk

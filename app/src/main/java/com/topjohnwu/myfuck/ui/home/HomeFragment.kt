@@ -5,28 +5,28 @@ import android.view.*
 import android.widget.ImageView
 import android.widget.TextView
 import com.topjohnwu.myfuck.R
-import com.topjohnwu.myfuck.arch.BaseUIFragment
-import com.topjohnwu.myfuck.core.download.BaseDownloader
+import com.topjohnwu.myfuck.arch.BaseFragment
+import com.topjohnwu.myfuck.arch.viewModel
+import com.topjohnwu.myfuck.core.Info
+import com.topjohnwu.myfuck.core.download.DownloadService
 import com.topjohnwu.myfuck.databinding.FragmentHomeMd2Binding
-import com.topjohnwu.myfuck.di.viewModel
 import com.topjohnwu.myfuck.events.RebootEvent
-import com.topjohnwu.superuser.Shell
 
-class HomeFragment : BaseUIFragment<HomeViewModel, FragmentHomeMd2Binding>() {
+class HomeFragment : BaseFragment<FragmentHomeMd2Binding>() {
 
     override val layoutRes = R.layout.fragment_home_md2
     override val viewModel by viewModel<HomeViewModel>()
 
     override fun onStart() {
         super.onStart()
-        activity.title = resources.getString(R.string.section_home)
+        activity?.title = resources.getString(R.string.section_home)
         setHasOptionsMenu(true)
-        BaseDownloader.observeProgress(this, viewModel::onProgressUpdate)
+        DownloadService.observeProgress(this, viewModel::onProgressUpdate)
     }
 
     private fun checkTitle(text: TextView, icon: ImageView) {
         text.post {
-            if (text.layout.getEllipsisCount(0) != 0) {
+            if (text.layout?.getEllipsisCount(0) != 0) {
                 with (icon) {
                     layoutParams.width = 0
                     layoutParams.height = 0
@@ -56,7 +56,7 @@ class HomeFragment : BaseUIFragment<HomeViewModel, FragmentHomeMd2Binding>() {
 
     override fun onCreateOptionsMenu(menu: Menu, inflater: MenuInflater) {
         inflater.inflate(R.menu.menu_home_md2, menu)
-        if (!Shell.rootAccess())
+        if (!Info.isRooted)
             menu.removeItem(R.id.action_reboot)
     }
 
@@ -64,10 +64,14 @@ class HomeFragment : BaseUIFragment<HomeViewModel, FragmentHomeMd2Binding>() {
         when (item.itemId) {
             R.id.action_settings ->
                 HomeFragmentDirections.actionHomeFragmentToSettingsFragment().navigate()
-            R.id.action_reboot -> RebootEvent.inflateMenu(activity).show()
+            R.id.action_reboot -> activity?.let { RebootEvent.inflateMenu(it).show() }
             else -> return super.onOptionsItemSelected(item)
         }
         return true
     }
 
+    override fun onResume() {
+        super.onResume()
+        viewModel.stateManagerProgress = 0
+    }
 }

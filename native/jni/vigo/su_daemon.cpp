@@ -5,10 +5,9 @@
 #include <sys/wait.h>
 #include <sys/mount.h>
 
-#include <daemon.hpp>
-#include <utils.hpp>
+#include <myfuck.hpp>
+#include <base.hpp>
 #include <selinux.hpp>
-#include <db.hpp>
 
 #include "vigo.hpp"
 #include "pts.hpp"
@@ -18,9 +17,9 @@ using namespace std;
 static pthread_mutex_t cache_lock = PTHREAD_MUTEX_INITIALIZER;
 static shared_ptr<su_info> cached;
 
-su_info::su_info(unsigned uid) :
-        uid(uid), access(DEFAULT_SU_ACCESS), mgr_st({}),
-        timestamp(0), _lock(PTHREAD_MUTEX_INITIALIZER) {}
+su_info::su_info(int uid) :
+uid(uid), eval_uid(-1), access(DEFAULT_SU_ACCESS), mgr_uid(-1),
+timestamp(0), _lock(PTHREAD_MUTEX_INITIALIZER) {}
 
 su_info::~su_info() {
     pthread_mutex_destroy(&_lock);
@@ -43,33 +42,126 @@ void su_info::refresh() {
     timestamp = ts.tv_sec * 1000L + ts.tv_nsec / 1000000L;
 }
 
-static void database_check(const shared_ptr<su_info> &info) {
-    int uid = info->uid;
-    get_db_settings(info->cfg);
-    get_db_strings(info->str);
+void su_info::check_db() {
+    eval_uid = uid;
+    get_db_settings(cfg);
 
     // Check multiuser settings
-    switch (info->cfg[SU_MULTIUSER_MODE]) {
-        case MULTIUSER_MODE_OWNER_ONLY:
-            if (info->uid / 100000) {
-                uid = -1;
-                info->access = NO_SU_ACCESS;
-            }
-            break;
-        case MULTIUSER_MODE_OWNER_MANAGED:
-            uid = info->uid % 100000;
-            break;
-        case MULTIUSER_MODE_USER:
-        default:
-            break;
+    switch (cfg[SU_MULTIUSER_MODE]) {
+    case MULTIUSER_MODE_OWNER_ONLY:
+        if (to_user_id(uid) != 0) {
+            eval_uid = -1;
+            access = NO_SU_ACCESS;
+        }
+        break;
+    case MULTIUSER_MODE_OWNER_MANAGED:
+        eval_uid = to_app_id(uid);
+        break;
+    case MULTIUSER_MODE_USER:
+    default:
+        break;
     }
 
-    if (uid > 0)
-        get_uid_policy(info->access, uid);
+    if (eval_uid > 0) {
+        char query[256], *err;
+        snprintf(query, sizeof(query),
+            "SELECT policy, logging, notification FROM policies "
+            "WHERE uid=%d AND (until=0 OR until>%li)", eval_uid, time(nullptr));
+        err = db_exec(query, [&](db_row &row) -> bool {
+            access.policy = (policy_t) parse_int(row["policy"]);
+            access.log = parse_int(row["logging"]);
+            access.notify = parse_int(row["notification"]);
+            LOGD("myfuckdb: query policy=[%d] log=[%d] notify=[%d]\n",
+                 access.policy, access.log, access.notify);
+            return true;
+        });
+        db_err_cmd(err, return);
+    }
 
     // We need to check our manager
-    if (info->access.log || info->access.notify)
-        validate_manager(info->str[SU_MANAGER], uid / 100000, &info->mgr_st);
+    if (access.log || access.notify) {
+        check_pkg_refresh();
+        mgr_uid = get_manager(to_user_id(eval_uid), &mgr_pkg, true);
+    }
+}
+
+bool uid_granted_root(int uid) {
+    if (uid == AID_ROOT)
+        return true;
+
+    db_settings cfg;
+    get_db_settings(cfg);
+
+    // Check user root access settings
+    switch (cfg[ROOT_ACCESS]) {
+    case ROOT_ACCESS_DISABLED:
+        return false;
+    case ROOT_ACCESS_APPS_ONLY:
+        if (uid == AID_SHELL)
+            return false;
+        break;
+    case ROOT_ACCESS_ADB_ONLY:
+        if (uid != AID_SHELL)
+            return false;
+        break;
+    case ROOT_ACCESS_APPS_AND_ADB:
+        break;
+    }
+
+    // Check multiuser settings
+    switch (cfg[SU_MULTIUSER_MODE]) {
+    case MULTIUSER_MODE_OWNER_ONLY:
+        if (to_user_id(uid) != 0)
+            return false;
+        break;
+    case MULTIUSER_MODE_OWNER_MANAGED:
+        uid = to_app_id(uid);
+        break;
+    case MULTIUSER_MODE_USER:
+    default:
+        break;
+    }
+
+    bool granted = false;
+
+    char query[256], *err;
+    snprintf(query, sizeof(query),
+        "SELECT policy FROM policies WHERE uid=%d AND (until=0 OR until>%li)",
+        uid, time(nullptr));
+    err = db_exec(query, [&](db_row &row) -> bool {
+        granted = parse_int(row["policy"]) == ALLOW;
+        return true;
+    });
+    db_err_cmd(err, return false);
+
+    return granted;
+}
+
+void prune_su_access() {
+    cached.reset();
+    vector<bool> app_no_list = get_app_no_list();
+    vector<int> rm_uids;
+    char query[256], *err;
+    strlcpy(query, "SELECT uid FROM policies", sizeof(query));
+    err = db_exec(query, [&](db_row &row) -> bool {
+        int uid = parse_int(row["uid"]);
+        int app_id = to_app_id(uid);
+        if (app_id >= AID_APP_START && app_id <= AID_APP_END) {
+            int app_no = app_id - AID_APP_START;
+            if (app_no >= app_no_list.size() || !app_no_list[app_no]) {
+                // The app_id is no longer installed
+                rm_uids.push_back(uid);
+            }
+        }
+        return true;
+    });
+    db_err_cmd(err, return);
+
+    for (int uid : rm_uids) {
+        snprintf(query, sizeof(query), "DELETE FROM policies WHERE uid == %d", uid);
+        // Don't care about errors
+        db_exec(query);
+    }
 }
 
 static shared_ptr<su_info> get_su_info(unsigned uid) {
@@ -89,10 +181,10 @@ static shared_ptr<su_info> get_su_info(unsigned uid) {
 
     if (info->access.policy == QUERY) {
         // Not cached, get data from database
-        database_check(info);
+        info->check_db();
 
         // If it's root or the manager, allow it silently
-        if (info->uid == UID_ROOT || (info->uid % 100000) == (info->mgr_st.st_uid % 100000)) {
+        if (info->uid == AID_ROOT || to_app_id(info->uid) == to_app_id(info->mgr_uid)) {
             info->access = SILENT_SU_ACCESS;
             return info;
         }
@@ -104,13 +196,13 @@ static shared_ptr<su_info> get_su_info(unsigned uid) {
                 info->access = NO_SU_ACCESS;
                 break;
             case ROOT_ACCESS_ADB_ONLY:
-                if (info->uid != UID_SHELL) {
+                if (info->uid != AID_SHELL) {
                     LOGW("Root access limited to ADB only!\n");
                     info->access = NO_SU_ACCESS;
                 }
                 break;
             case ROOT_ACCESS_APPS_ONLY:
-                if (info->uid == UID_SHELL) {
+                if (info->uid == AID_SHELL) {
                     LOGW("Root access is disabled for ADB!\n");
                     info->access = NO_SU_ACCESS;
                 }
@@ -124,24 +216,11 @@ static shared_ptr<su_info> get_su_info(unsigned uid) {
             return info;
 
         // If still not determined, check if manager exists
-        if (info->str[SU_MANAGER].empty()) {
+        if (info->mgr_uid < 0) {
             info->access = NO_SU_ACCESS;
             return info;
         }
-    } else {
-        return info;
     }
-
-    // If still not determined, ask manager
-    int fd = app_request(info);
-    if (fd < 0) {
-        info->access.policy = DENY;
-    } else {
-        int ret = read_int_be(fd);
-        info->access.policy = ret < 0 ? DENY : static_cast<policy_t>(ret);
-        close(fd);
-    }
-
     return info;
 }
 
@@ -158,19 +237,37 @@ static void set_identity(unsigned uid) {
     }
 }
 
-void su_daemon_handler(int client, struct ucred *credential) {
-    LOGD("su: request from pid=[%d], client=[%d]\n", credential->pid, client);
+void su_daemon_handler(int client, const sock_cred *cred) {
+    LOGD("su: request from pid=[%d], client=[%d]\n", cred->pid, client);
 
     su_context ctx = {
-        .info = get_su_info(credential->uid),
+        .info = get_su_info(cred->uid),
         .req = su_request(),
-        .pid = credential->pid
+        .pid = cred->pid
     };
 
     // Read su_request
-    xxread(client, &ctx.req, sizeof(su_req_base));
-    read_string(client, ctx.req.shell);
-    read_string(client, ctx.req.command);
+    if (xxread(client, &ctx.req, sizeof(su_req_base)) < 0
+        || !read_string(client, ctx.req.shell)
+        || !read_string(client, ctx.req.command)) {
+        LOGW("su: remote process probably died, abort\n");
+        ctx.info.reset();
+        write_int(client, DENY);
+        close(client);
+        return;
+    }
+
+    // If still not determined, ask manager
+    if (ctx.info->access.policy == QUERY) {
+        int fd = app_request(ctx);
+        if (fd < 0) {
+            ctx.info->access.policy = DENY;
+        } else {
+            int ret = read_int_be(fd);
+            ctx.info->access.policy = ret < 0 ? DENY : static_cast<policy_t>(ret);
+            close(fd);
+        }
+    }
 
     if (ctx.info->access.log)
         app_log(ctx);
@@ -214,7 +311,7 @@ void su_daemon_handler(int client, struct ucred *credential) {
     LOGD("su: fork handler\n");
 
     // Abort upon any error occurred
-    log_cb.ex = exit;
+    exit_on_error(true);
 
     // ack
     write_int(client, 0);
@@ -222,23 +319,41 @@ void su_daemon_handler(int client, struct ucred *credential) {
     // Become session leader
     xsetsid();
 
-    // Get pts_slave
-    string pts_slave = read_string(client);
-
     // The FDs for each of the streams
-    int infd  = recv_fd(client);
+    int infd = recv_fd(client);
     int outfd = recv_fd(client);
     int errfd = recv_fd(client);
 
-    if (!pts_slave.empty()) {
-        LOGD("su: pts_slave=[%s]\n", pts_slave.data());
-        // Check pts_slave file is owned by daemon_from_uid
-        struct stat st;
-        xstat(pts_slave.data(), &st);
+    // App need a PTY
+    if (read_int(client)) {
+        string pts;
+        string ptmx;
+        auto myfuckpts = MYFUCKTMP + "/" SHELLPTS;
+        if (access(myfuckpts.data(), F_OK)) {
+            pts = "/dev/pts";
+            ptmx = "/dev/ptmx";
+        } else {
+            pts = myfuckpts;
+            ptmx = myfuckpts + "/ptmx";
+        }
+        int ptmx_fd = xopen(ptmx.data(), O_RDWR);
+        grantpt(ptmx_fd);
+        unlockpt(ptmx_fd);
+        int pty_num = get_pty_num(ptmx_fd);
+        if (pty_num < 0) {
+            // Kernel issue? Fallback to /dev/pts
+            close(ptmx_fd);
+            pts = "/dev/pts";
+            ptmx_fd = xopen("/dev/ptmx", O_RDWR);
+            grantpt(ptmx_fd);
+            unlockpt(ptmx_fd);
+            pty_num = get_pty_num(ptmx_fd);
+        }
+        send_fd(client, ptmx_fd);
+        close(ptmx_fd);
 
-        // If caller is not root, ensure the owner of pts_slave is the caller
-        if(st.st_uid != ctx.info->uid && ctx.info->uid != 0)
-            LOGE("su: Wrong permission of pts_slave\n");
+        string pts_slave = pts + "/" + to_string(pty_num);
+        LOGD("su: pts_slave=[%s]\n", pts_slave.data());
 
         // Opening the TTY has to occur after the
         // fork() and setsid() so that it becomes
@@ -257,11 +372,6 @@ void su_daemon_handler(int client, struct ucred *credential) {
     xdup2(infd, STDIN_FILENO);
     xdup2(outfd, STDOUT_FILENO);
     xdup2(errfd, STDERR_FILENO);
-
-    // Unleash all streams from SELinux hell
-    setfilecon("/proc/self/fd/0", "u:object_r:" SEPOL_FILE_TYPE ":s0");
-    setfilecon("/proc/self/fd/1", "u:object_r:" SEPOL_FILE_TYPE ":s0");
-    setfilecon("/proc/self/fd/2", "u:object_r:" SEPOL_FILE_TYPE ":s0");
 
     close(infd);
     close(outfd);
@@ -301,16 +411,17 @@ void su_daemon_handler(int client, struct ucred *credential) {
     umask(022);
     char path[32];
     snprintf(path, sizeof(path), "/proc/%d/cwd", ctx.pid);
-    chdir(path);
+    char cwd[PATH_MAX];
+    if (realpath(path, cwd))
+        chdir(cwd);
     snprintf(path, sizeof(path), "/proc/%d/environ", ctx.pid);
-    char buf[4096] = { 0 };
-    int fd = xopen(path, O_RDONLY);
-    read(fd, buf, sizeof(buf));
-    close(fd);
+    auto env = full_read(path);
     clearenv();
-    for (size_t pos = 0; buf[pos];) {
-        putenv(buf + pos);
-        pos += strlen(buf + pos) + 1;
+    for (size_t pos = 0; pos < env.size(); ++pos) {
+        putenv(env.data() + pos);
+        pos = env.find_first_of('\0', pos);
+        if (pos == std::string::npos)
+            break;
     }
     if (!ctx.req.keepenv) {
         struct passwd *pw;
@@ -331,5 +442,4 @@ void su_daemon_handler(int client, struct ucred *credential) {
     execvp(ctx.req.shell.data(), (char **) argv);
     fprintf(stderr, "Cannot execute %s: %s\n", ctx.req.shell.data(), strerror(errno));
     PLOGE("exec");
-    exit(EXIT_FAILURE);
 }

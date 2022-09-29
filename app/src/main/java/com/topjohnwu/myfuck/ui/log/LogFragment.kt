@@ -7,19 +7,23 @@ import android.view.MenuItem
 import android.view.View
 import androidx.core.view.isVisible
 import com.topjohnwu.myfuck.R
-import com.topjohnwu.myfuck.arch.BaseUIFragment
+import com.topjohnwu.myfuck.arch.BaseFragment
+import com.topjohnwu.myfuck.arch.viewModel
 import com.topjohnwu.myfuck.databinding.FragmentLogMd2Binding
-import com.topjohnwu.myfuck.di.viewModel
-import com.topjohnwu.myfuck.ktx.addSimpleItemDecoration
-import com.topjohnwu.myfuck.ktx.addVerticalPadding
-import com.topjohnwu.myfuck.ktx.fixEdgeEffect
 import com.topjohnwu.myfuck.ui.MainActivity
 import com.topjohnwu.myfuck.utils.MotionRevealHelper
+import rikka.recyclerview.addEdgeSpacing
+import rikka.recyclerview.addItemSpacing
+import rikka.recyclerview.fixEdgeEffect
 
-class LogFragment : BaseUIFragment<LogViewModel, FragmentLogMd2Binding>() {
+class LogFragment : BaseFragment<FragmentLogMd2Binding>() {
 
     override val layoutRes = R.layout.fragment_log_md2
     override val viewModel by viewModel<LogViewModel>()
+    override val snackbarView: View?
+        get() = if (isMyfuckLogVisible) binding.logFilterSuperuser.snackbarContainer
+                else super.snackbarView
+    override val snackbarAnchorView get() = binding.logFilterToggle
 
     private var actionSave: MenuItem? = null
     private var isMyfuckLogVisible
@@ -37,7 +41,7 @@ class LogFragment : BaseUIFragment<LogViewModel, FragmentLogMd2Binding>() {
     override fun onStart() {
         super.onStart()
         setHasOptionsMenu(true)
-        activity.title = resources.getString(R.string.logs)
+        activity?.title = resources.getString(R.string.logs)
     }
 
     override fun onViewCreated(view: View, savedInstanceState: Bundle?) {
@@ -46,20 +50,11 @@ class LogFragment : BaseUIFragment<LogViewModel, FragmentLogMd2Binding>() {
             isMyfuckLogVisible = true
         }
 
-        val resource = requireContext().resources
-        val l_50 = resource.getDimensionPixelSize(R.dimen.l_50)
-        val l1 = resource.getDimensionPixelSize(R.dimen.l1)
-        binding.logFilterSuperuser.logSuperuser.addVerticalPadding(
-            0,
-            l1
-        )
-        binding.logFilterSuperuser.logSuperuser.addSimpleItemDecoration(
-            left = l1,
-            top = l_50,
-            right = l1,
-            bottom = l_50,
-        )
-        binding.logFilterSuperuser.logSuperuser.fixEdgeEffect()
+        binding.logFilterSuperuser.logSuperuser.apply {
+            addEdgeSpacing(bottom = R.dimen.l1)
+            addItemSpacing(R.dimen.l1, R.dimen.l_50, R.dimen.l1)
+            fixEdgeEffect()
+        }
     }
 
 

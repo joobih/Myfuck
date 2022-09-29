@@ -1,9 +1,10 @@
 package com.topjohnwu.myfuck.events.dialog
 
 import android.app.ProgressDialog
+import android.content.Context
 import android.widget.Toast
 import com.topjohnwu.myfuck.R
-import com.topjohnwu.myfuck.arch.BaseUIActivity
+import com.topjohnwu.myfuck.arch.NavigationActivity
 import com.topjohnwu.myfuck.ui.flash.FlashFragment
 import com.topjohnwu.myfuck.utils.Utils
 import com.topjohnwu.myfuck.view.MyfuckDialog
@@ -12,26 +13,28 @@ import com.topjohnwu.superuser.Shell
 class UninstallDialog : DialogEvent() {
 
     override fun build(dialog: MyfuckDialog) {
-        dialog.applyTitle(R.string.uninstall_myfuck_title)
-            .applyMessage(R.string.uninstall_myfuck_msg)
-            .applyButton(MyfuckDialog.ButtonType.POSITIVE) {
-                titleRes = R.string.restore_img
-                onClick { restore() }
+        dialog.apply {
+            setTitle(R.string.uninstall_myfuck_title)
+            setMessage(R.string.uninstall_myfuck_msg)
+            setButton(MyfuckDialog.ButtonType.POSITIVE) {
+                text = R.string.restore_img
+                onClick { restore(dialog.context) }
             }
-            .applyButton(MyfuckDialog.ButtonType.NEGATIVE) {
-                titleRes = R.string.complete_uninstall
-                onClick { completeUninstall() }
+            setButton(MyfuckDialog.ButtonType.NEGATIVE) {
+                text = R.string.complete_uninstall
+                onClick { completeUninstall(dialog) }
             }
+        }
     }
 
     @Suppress("DEPRECATION")
-    private fun restore() {
-        val dialog = ProgressDialog(dialog.context).apply {
-            setMessage(dialog.context.getString(R.string.restore_img_msg))
+    private fun restore(context: Context) {
+        val dialog = ProgressDialog(context).apply {
+            setMessage(context.getString(R.string.restore_img_msg))
             show()
         }
 
-        Shell.su("restore_imgs").submit { result ->
+        Shell.cmd("restore_imgs").submit { result ->
             dialog.dismiss()
             if (result.isSuccess) {
                 Utils.toast(R.string.restore_done, Toast.LENGTH_SHORT)
@@ -41,9 +44,9 @@ class UninstallDialog : DialogEvent() {
         }
     }
 
-    private fun completeUninstall() {
-        (dialog.ownerActivity as? BaseUIActivity<*, *>)
-                ?.navigation?.navigate(FlashFragment.uninstall())
+    private fun completeUninstall(dialog: MyfuckDialog) {
+        (dialog.ownerActivity as NavigationActivity<*>)
+            .navigation.navigate(FlashFragment.uninstall())
     }
 
 }

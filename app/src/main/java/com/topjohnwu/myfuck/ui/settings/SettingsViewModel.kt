@@ -9,30 +9,26 @@ import com.topjohnwu.myfuck.BR
 import com.topjohnwu.myfuck.BuildConfig
 import com.topjohnwu.myfuck.R
 import com.topjohnwu.myfuck.arch.BaseViewModel
-import com.topjohnwu.myfuck.arch.adapterOf
-import com.topjohnwu.myfuck.arch.diffListOf
-import com.topjohnwu.myfuck.arch.itemBindingOf
 import com.topjohnwu.myfuck.core.Const
 import com.topjohnwu.myfuck.core.Info
+import com.topjohnwu.myfuck.core.di.AppContext
 import com.topjohnwu.myfuck.core.isRunningAsStub
 import com.topjohnwu.myfuck.core.tasks.HideAPK
-import com.topjohnwu.myfuck.data.database.RepoDao
-import com.topjohnwu.myfuck.di.AppContext
+import com.topjohnwu.myfuck.databinding.bindExtra
 import com.topjohnwu.myfuck.events.AddHomeIconEvent
-import com.topjohnwu.myfuck.events.RecreateEvent
+import com.topjohnwu.myfuck.events.SnackbarEvent
 import com.topjohnwu.myfuck.events.dialog.BiometricEvent
 import com.topjohnwu.myfuck.ktx.activity
 import com.topjohnwu.myfuck.utils.Utils
 import com.topjohnwu.superuser.Shell
 import kotlinx.coroutines.launch
 
-class SettingsViewModel(
-    private val repositoryDao: RepoDao
-) : BaseViewModel(), BaseSettingsItem.Callback {
+class SettingsViewModel : BaseViewModel(), BaseSettingsItem.Handler {
 
-    val adapter = adapterOf<BaseSettingsItem>()
-    val itemBinding = itemBindingOf<BaseSettingsItem> { it.bindExtra(BR.callback, this) }
-    val items = diffListOf(createItems())
+    val items = createItems()
+    val extraBindings = bindExtra {
+        it.put(BR.handler, this)
+    }
 
     init {
         viewModelScope.launch {
@@ -57,22 +53,19 @@ class SettingsViewModel(
             AppSettings,
             UpdateChannel, UpdateChannelUrl, DoHToggle, UpdateChecker, DownloadPath
         ))
-        if (Info.env.isActive) {
-            list.add(ClearRepoCache)
-            if (Const.USER_ID == 0) {
-                if (hidden)
-                    list.add(Restore)
-                else if (Info.isConnected.get())
-                    list.add(Hide)
-            }
+        if (Build.VERSION.SDK_INT >= 22 && Info.env.isActive && Const.USER_ID == 0) {
+            if (hidden) list.add(Restore) else list.add(Hide)
         }
 
         // Myfuck
         if (Info.env.isActive) {
             list.addAll(listOf(
                 Myfuck,
-                MyfuckHide, SystemlessHosts
+                SystemlessHosts
             ))
+            if (Const.Version.atLeast_24_0()) {
+                list.addAll(listOf(Zygisk, DenyList, DenyListConfig))
+            }
         }
 
         // Superuser
@@ -90,27 +83,34 @@ class SettingsViewModel(
                 // Re-authenticate is not feasible on 8.0+
                 list.add(Reauthenticate)
             }
+            if (Build.VERSION.SDK_INT >= 31) {
+                // Can hide overlay windows on 12.0+
+                list.remove(Tapjack)
+            }
         }
 
         return list
     }
 
-    override fun onItemPressed(view: View, item: BaseSettingsItem, callback: () -> Unit) = when (item) {
-        is DownloadPath -> withExternalRW(callback)
-        is Biometrics -> authenticate(callback)
-        is Theme -> SettingsFragmentDirections.actionSettingsFragmentToThemeFragment().navigate()
-        is ClearRepoCache -> clearRepoCache()
-        is SystemlessHosts -> createHosts()
-        is Restore -> HideAPK.restore(view.activity)
-        is AddShortcut -> AddHomeIconEvent().publish()
-        else -> callback()
+    override fun onItemPressed(view: View, item: BaseSettingsItem, andThen: () -> Unit) {
+        when (item) {
+            DownloadPath -> withExternalRW(andThen)
+            Biometrics -> authenticate(andThen)
+            Theme -> SettingsFragmentDirections.actionSettingsFragmentToThemeFragment().navigate()
+            DenyListConfig -> SettingsFragmentDirections.actionSettingsFragmentToDenyFragment().navigate()
+            SystemlessHosts -> createHosts()
+            Hide, Restore -> withInstallPermission(andThen)
+            AddShortcut -> AddHomeIconEvent().publish()
+            else -> andThen()
+        }
     }
 
-    override fun onItemChanged(view: View, item: BaseSettingsItem) {
+    override fun onItemAction(view: View, item: BaseSettingsItem) {
         when (item) {
-            is Language -> RecreateEvent().publish()
-            is UpdateChannel -> openUrlIfNecessary(view)
+            UpdateChannel -> openUrlIfNecessary(view)
             is Hide -> viewModelScope.launch { HideAPK.hide(view.activity, item.value) }
+            Restore -> viewModelScope.launch { HideAPK.restore(view.activity) }
+            Zygisk -> if (Zygisk.mismatch) SnackbarEvent(R.string.reboot_apply_change).publish()
             else -> Unit
         }
     }
@@ -129,15 +129,8 @@ class SettingsViewModel(
         }.publish()
     }
 
-    private fun clearRepoCache() {
-        viewModelScope.launch {
-            repositoryDao.clear()
-            Utils.toast(R.string.repo_cache_cleared, Toast.LENGTH_SHORT)
-        }
-    }
-
     private fun createHosts() {
-        Shell.su("add_hosts_module").submit {
+        Shell.cmd("add_hosts_module").submit {
             Utils.toast(R.string.settings_hosts_toast, Toast.LENGTH_SHORT)
         }
     }

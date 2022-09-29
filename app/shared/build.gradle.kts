@@ -2,13 +2,12 @@ plugins {
     id("com.android.library")
 }
 
+setupCommon()
+
 android {
-    defaultConfig {
-        vectorDrawables.useSupportLibrary = true
-        consumerProguardFiles("proguard-rules.pro")
-    }
+    namespace = "com.topjohnwu.shared"
 }
 
 dependencies {
-    implementation(fileTree(mapOf("dir" to "libs", "include" to listOf("*.jar"))))
+    api("io.michaelrocks:paranoid-core:0.3.7")
 }

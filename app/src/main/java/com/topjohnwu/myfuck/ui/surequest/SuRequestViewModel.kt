@@ -20,21 +20,20 @@ import com.topjohnwu.myfuck.BR
 import com.topjohnwu.myfuck.R
 import com.topjohnwu.myfuck.arch.BaseViewModel
 import com.topjohnwu.myfuck.core.Config
-import com.topjohnwu.myfuck.core.myfuckdb.PolicyDao
-import com.topjohnwu.myfuck.core.model.su.SuPolicy
+import com.topjohnwu.myfuck.core.data.myfuckdb.PolicyDao
+import com.topjohnwu.myfuck.core.di.AppContext
 import com.topjohnwu.myfuck.core.model.su.SuPolicy.Companion.ALLOW
 import com.topjohnwu.myfuck.core.model.su.SuPolicy.Companion.DENY
 import com.topjohnwu.myfuck.core.su.SuRequestHandler
 import com.topjohnwu.myfuck.core.utils.BiometricHelper
-import com.topjohnwu.myfuck.di.AppContext
+import com.topjohnwu.myfuck.databinding.set
 import com.topjohnwu.myfuck.events.DieEvent
 import com.topjohnwu.myfuck.events.ShowUIEvent
 import com.topjohnwu.myfuck.events.dialog.BiometricEvent
+import com.topjohnwu.myfuck.ktx.getLabel
 import com.topjohnwu.myfuck.utils.TextHolder
 import com.topjohnwu.myfuck.utils.Utils
-import com.topjohnwu.myfuck.utils.set
 import kotlinx.coroutines.launch
-import me.tatarka.bindingcollectionadapter2.ItemBinding
 import java.util.concurrent.TimeUnit.SECONDS
 
 class SuRequestViewModel(
@@ -70,10 +69,9 @@ class SuRequestViewModel(
         false
     }
 
-    val itemBinding = ItemBinding.of<String>(BR.item, R.layout.item_spinner)
-
     private val handler = SuRequestHandler(AppContext.packageManager, policyDB)
     private lateinit var timer: CountDownTimer
+    private var initialized = false
 
     fun grantPressed() {
         cancelTimer()
@@ -100,17 +98,31 @@ class SuRequestViewModel(
     fun handleRequest(intent: Intent) {
         viewModelScope.launch {
             if (handler.start(intent))
-                showDialog(handler.policy)
+                showDialog()
             else
                 DieEvent().publish()
         }
     }
 
-    private fun showDialog(policy: SuPolicy) {
-        icon = policy.icon
-        title = policy.appName
-        packageName = policy.packageName
-        selectedItemPosition = timeoutPrefs.getInt(policy.packageName, 0)
+    private fun showDialog() {
+        val pm = handler.pm
+        val info = handler.pkgInfo
+        val app = info.applicationInfo
+
+        if (app == null) {
+            // The request is not coming from an app process, and the UID is a
+            // shared UID. We have no way to know where this request comes from.
+            icon = pm.defaultActivityIcon
+            title = "[SharedUID] ${info.sharedUserId}"
+            packageName = info.sharedUserId
+        } else {
+            val prefix = if (info.sharedUserId == null) "" else "[SharedUID] "
+            icon = app.loadIcon(pm)
+            title = "$prefix${app.getLabel(pm)}"
+            packageName = info.packageName
+        }
+
+        selectedItemPosition = timeoutPrefs.getInt(packageName, 0)
 
         // Set timer
         val millis = SECONDS.toMillis(Config.suDefaultTimeout.toLong())
@@ -118,17 +130,25 @@ class SuRequestViewModel(
 
         // Actually show the UI
         ShowUIEvent(if (Config.suTapjack) EmptyAccessibilityDelegate else null).publish()
+        initialized = true
     }
 
     private fun respond(action: Int) {
+        if (!initialized) {
+            // ignore the response until showDialog done
+            return
+        }
+
         timer.cancel()
 
         val pos = selectedItemPosition
-        timeoutPrefs.edit().putInt(handler.policy.packageName, pos).apply()
-        handler.respond(action, Config.Value.TIMEOUT_LIST[pos])
+        timeoutPrefs.edit().putInt(packageName, pos).apply()
 
-        // Kill activity after response
-        DieEvent().publish()
+        viewModelScope.launch {
+            handler.respond(action, Config.Value.TIMEOUT_LIST[pos])
+            // Kill activity after response
+            DieEvent().publish()
+        }
     }
 
     private fun cancelTimer() {

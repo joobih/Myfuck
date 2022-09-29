@@ -2,7 +2,7 @@
 
 #include <myfuck.hpp>
 #include <selinux.hpp>
-#include <utils.hpp>
+#include <base.hpp>
 
 using namespace std;
 
@@ -15,29 +15,29 @@ using namespace std;
 
 static void restore_syscon(int dirfd) {
     struct dirent *entry;
-    DIR *dir;
     char *con;
 
     if (fgetfilecon(dirfd, &con) >= 0) {
-        if (strlen(con) == 0 || strcmp(con, UNLABEL_CON) == 0)
+        if (strlen(con) == 0 || strcmp(con, UNLABEL_CON) == 0 || strcmp(con, ADB_CON) == 0)
             fsetfilecon(dirfd, SYSTEM_CON);
         freecon(con);
     }
 
-    dir = xfdopendir(dirfd);
-    while ((entry = xreaddir(dir))) {
+    auto dir = xopen_dir(dirfd);
+    while ((entry = xreaddir(dir.get()))) {
         int fd = openat(dirfd, entry->d_name, O_RDONLY | O_CLOEXEC);
         if (entry->d_type == DT_DIR) {
             restore_syscon(fd);
+            continue;
         } else if (entry->d_type == DT_REG) {
             if (fgetfilecon(fd, &con) >= 0) {
-                if (con[0] == '\0' || strcmp(con, UNLABEL_CON) == 0)
+                if (con[0] == '\0' || strcmp(con, UNLABEL_CON) == 0 || strcmp(con, ADB_CON) == 0)
                     fsetfilecon(fd, SYSTEM_CON);
                 freecon(con);
             }
         } else if (entry->d_type == DT_LNK) {
             getfilecon_at(dirfd, entry->d_name, &con);
-            if (con[0] == '\0' || strcmp(con, UNLABEL_CON) == 0)
+            if (con[0] == '\0' || strcmp(con, UNLABEL_CON) == 0 || strcmp(con, ADB_CON) == 0)
                 setfilecon_at(dirfd, entry->d_name, con);
             freecon(con);
         }
@@ -47,16 +47,16 @@ static void restore_syscon(int dirfd) {
 
 static void restore_myfuckcon(int dirfd) {
     struct dirent *entry;
-    DIR *dir;
 
     fsetfilecon(dirfd, MYFUCK_CON);
     fchown(dirfd, 0, 0);
 
-    dir = xfdopendir(dirfd);
-    while ((entry = xreaddir(dir))) {
+    auto dir = xopen_dir(dirfd);
+    while ((entry = xreaddir(dir.get()))) {
         int fd = xopenat(dirfd, entry->d_name, O_RDONLY | O_CLOEXEC);
         if (entry->d_type == DT_DIR) {
             restore_myfuckcon(fd);
+            continue;
         } else if (entry->d_type) {
             fsetfilecon(fd, MYFUCK_CON);
             fchown(fd, 0, 0);
@@ -66,27 +66,20 @@ static void restore_myfuckcon(int dirfd) {
 }
 
 void restorecon() {
+    if (!selinux_enabled())
+        return;
     int fd = xopen(SELINUX_CONTEXT, O_WRONLY | O_CLOEXEC);
     if (write(fd, ADB_CON, sizeof(ADB_CON)) >= 0)
         lsetfilecon(SECURE_DIR, ADB_CON);
     close(fd);
     lsetfilecon(MODULEROOT, SYSTEM_CON);
-    fd = xopen(MODULEROOT, O_RDONLY | O_CLOEXEC);
-    restore_syscon(fd);
-    close(fd);
-    fd = xopen(DATABIN, O_RDONLY | O_CLOEXEC);
-    restore_myfuckcon(fd);
-    close(fd);
+    restore_syscon(xopen(MODULEROOT, O_RDONLY | O_CLOEXEC));
+    restore_myfuckcon(xopen(DATABIN, O_RDONLY | O_CLOEXEC));
 }
 
 void restore_tmpcon() {
-    if (MYFUCKTMP == "/system/bin") {
-        // Running with emulator.sh
-        if (SDK_INT >= 26)
-            lsetfilecon("/system/bin/myfuck", EXEC_CON);
+    if (!selinux_enabled())
         return;
-    }
-
     if (MYFUCKTMP == "/sbin")
         setfilecon(MYFUCKTMP.data(), ROOT_CON);
     else

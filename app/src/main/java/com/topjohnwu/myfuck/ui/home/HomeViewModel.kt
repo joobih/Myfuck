@@ -1,40 +1,39 @@
 package com.topjohnwu.myfuck.ui.home
 
+import android.content.Context
+import androidx.core.net.toUri
 import androidx.databinding.Bindable
-import androidx.lifecycle.viewModelScope
+import com.topjohnwu.myfuck.BR
 import com.topjohnwu.myfuck.BuildConfig
 import com.topjohnwu.myfuck.R
 import com.topjohnwu.myfuck.arch.*
 import com.topjohnwu.myfuck.core.Config
 import com.topjohnwu.myfuck.core.Info
 import com.topjohnwu.myfuck.core.download.Subject
-import com.topjohnwu.myfuck.core.download.Subject.Manager
-import com.topjohnwu.myfuck.data.repository.NetworkService
-import com.topjohnwu.myfuck.events.OpenInappLinkEvent
+import com.topjohnwu.myfuck.core.download.Subject.App
+import com.topjohnwu.myfuck.core.repository.NetworkService
+import com.topjohnwu.myfuck.databinding.bindExtra
+import com.topjohnwu.myfuck.databinding.set
 import com.topjohnwu.myfuck.events.SnackbarEvent
 import com.topjohnwu.myfuck.events.dialog.EnvFixDialog
 import com.topjohnwu.myfuck.events.dialog.ManagerInstallDialog
 import com.topjohnwu.myfuck.events.dialog.UninstallDialog
 import com.topjohnwu.myfuck.ktx.await
+import com.topjohnwu.myfuck.utils.Utils
 import com.topjohnwu.myfuck.utils.asText
-import com.topjohnwu.myfuck.utils.set
 import com.topjohnwu.superuser.Shell
-import kotlinx.coroutines.launch
-import me.tatarka.bindingcollectionadapter2.BR
 import kotlin.math.roundToInt
-
-enum class MyfuckState {
-    NOT_INSTALLED, UP_TO_DATE, OBSOLETE, LOADING
-}
 
 class HomeViewModel(
     private val svc: NetworkService
-) : BaseViewModel() {
+) : AsyncLoadViewModel() {
+
+    enum class State {
+        LOADING, INVALID, OUTDATED, UP_TO_DATE
+    }
 
     val myfuckTitleBarrierIds =
         intArrayOf(R.id.home_myfuck_icon, R.id.home_myfuck_title, R.id.home_myfuck_button)
-    val myfuckDetailBarrierIds =
-        intArrayOf(R.id.home_myfuck_installed_version, R.id.home_device_details_ramdisk)
     val appTitleBarrierIds =
         intArrayOf(R.id.home_manager_icon, R.id.home_manager_title, R.id.home_manager_button)
 
@@ -42,96 +41,91 @@ class HomeViewModel(
     var isNoticeVisible = Config.safetyNotice
         set(value) = set(value, field, { field = it }, BR.noticeVisible)
 
-    val stateMyfuck = when {
-        !Info.env.isActive -> MyfuckState.NOT_INSTALLED
-        Info.env.myfuckVersionCode < BuildConfig.VERSION_CODE -> MyfuckState.OBSOLETE
-        else -> MyfuckState.UP_TO_DATE
-    }
+    val myfuckState
+        get() = when {
+            !Info.env.isActive -> State.INVALID
+            Info.env.versionCode < BuildConfig.VERSION_CODE -> State.OUTDATED
+            else -> State.UP_TO_DATE
+        }
 
     @get:Bindable
-    var stateManager = MyfuckState.LOADING
-        set(value) = set(value, field, { field = it }, BR.stateManager)
+    var appState = State.LOADING
+        set(value) = set(value, field, { field = it }, BR.appState)
 
-    val myfuckInstalledVersion get() = Info.env.run {
-        if (isActive)
-            "$myfuckVersionString ($myfuckVersionCode)".asText()
-        else
-            R.string.not_available.asText()
-    }
+    val myfuckInstalledVersion
+        get() = Info.env.run {
+            if (isActive)
+                ("$versionString ($versionCode)" + if (isDebug) " (D)" else "").asText()
+            else
+                R.string.not_available.asText()
+        }
 
     @get:Bindable
     var managerRemoteVersion = R.string.loading.asText()
         set(value) = set(value, field, { field = it }, BR.managerRemoteVersion)
 
-    val managerInstalledVersion = Info.stub?.let {
-        "${BuildConfig.VERSION_NAME} (${BuildConfig.VERSION_CODE}) (${it.version})"
-    } ?: "${BuildConfig.VERSION_NAME} (${BuildConfig.VERSION_CODE})"
+    val managerInstalledVersion
+        get() = "${BuildConfig.VERSION_NAME} (${BuildConfig.VERSION_CODE})" +
+            Info.stub?.let { " (${it.version})" }.orEmpty() +
+            if (BuildConfig.DEBUG) " (D)" else ""
 
     @get:Bindable
     var stateManagerProgress = 0
         set(value) = set(value, field, { field = it }, BR.stateManagerProgress)
 
-    @get:Bindable
-    val showSafetyNet get() = Info.hasGMS && isConnected.get()
-
-    val itemBinding = itemBindingOf<IconLink> {
-        it.bindExtra(BR.viewModel, this)
+    val extraBindings = bindExtra {
+        it.put(BR.viewModel, this)
     }
 
-    private var shownDialog = false
+    companion object {
+        private var checkedEnv = false
+    }
 
-    override fun refresh() = viewModelScope.launch {
-        state = State.LOADING
-        notifyPropertyChanged(BR.showSafetyNet)
+    override suspend fun doLoadWork() {
+        appState = State.LOADING
         Info.getRemote(svc)?.apply {
-            state = State.LOADED
-
-            stateManager = when {
-                BuildConfig.VERSION_CODE < myfuck.versionCode -> MyfuckState.OBSOLETE
-                else -> MyfuckState.UP_TO_DATE
+            appState = when {
+                BuildConfig.VERSION_CODE < myfuck.versionCode -> State.OUTDATED
+                else -> State.UP_TO_DATE
             }
 
+            val isDebug = Config.updateChannel == Config.Value.DEBUG_CHANNEL
             managerRemoteVersion =
-                "${myfuck.version} (${myfuck.versionCode}) (${stub.versionCode})".asText()
-
-            launch {
-                ensureEnv()
-            }
-        } ?: {
-            state = State.LOADING_FAILED
+                ("${myfuck.version} (${myfuck.versionCode}) (${stub.versionCode})" +
+                    if (isDebug) " (D)" else "").asText()
+        } ?: run {
+            appState = State.INVALID
             managerRemoteVersion = R.string.not_available.asText()
-        }()
+        }
+        ensureEnv()
     }
 
-    val showTest = false
-
-    fun onTestPressed() = object : ViewEvent(), ActivityExecutor {
-        override fun invoke(activity: BaseUIActivity<*, *>) {
-            /* Entry point to trigger test events within the app */
-        }
-    }.publish()
+    override fun onNetworkChanged(network: Boolean) = startLoading()
 
     fun onProgressUpdate(progress: Float, subject: Subject) {
-        if (subject is Manager)
+        if (subject is App)
             stateManagerProgress = progress.times(100f).roundToInt()
     }
 
-    fun onLinkPressed(link: String) = OpenInappLinkEvent(link).publish()
+    fun onLinkPressed(link: String) = object : ViewEvent(), ContextExecutor {
+        override fun invoke(context: Context) = Utils.openLink(context, link.toUri())
+    }.publish()
 
     fun onDeletePressed() = UninstallDialog().publish()
 
-    fun onManagerPressed() = when (state) {
-        State.LOADED -> withExternalRW { ManagerInstallDialog().publish() }
+    fun onManagerPressed() = when (appState) {
         State.LOADING -> SnackbarEvent(R.string.loading).publish()
-        else -> SnackbarEvent(R.string.no_connection).publish()
+        State.INVALID -> SnackbarEvent(R.string.no_connection).publish()
+        else -> withExternalRW {
+            withInstallPermission {
+                ManagerInstallDialog().publish()
+            }
+        }
     }
 
     fun onMyfuckPressed() = withExternalRW {
         HomeFragmentDirections.actionHomeFragmentToInstallFragment().navigate()
     }
-
-    fun onSafetyNetPressed() =
-        HomeFragmentDirections.actionHomeFragmentToSafetynetFragment().navigate()
 
     fun hideNotice() {
         Config.safetyNotice = false
@@ -139,17 +133,18 @@ class HomeViewModel(
     }
 
     private suspend fun ensureEnv() {
-        val invalidStates = listOf(
-            MyfuckState.NOT_INSTALLED,
-            MyfuckState.LOADING
-        )
-        if (invalidStates.any { it == stateMyfuck } || shownDialog) return
-
-        val result = Shell.su("env_check").await()
-        if (!result.isSuccess) {
-            shownDialog = true
-            EnvFixDialog().publish()
+        if (myfuckState == State.INVALID || checkedEnv) return
+        val cmd = "env_check ${Info.env.versionString} ${Info.env.versionCode}"
+        if (!Shell.cmd(cmd).await().isSuccess) {
+            EnvFixDialog(this).publish()
         }
+        checkedEnv = true
     }
 
+    val showTest = false
+    fun onTestPressed() = object : ViewEvent(), ActivityExecutor {
+        override fun invoke(activity: UIActivity<*>) {
+            /* Entry point to trigger test events within the app */
+        }
+    }.publish()
 }

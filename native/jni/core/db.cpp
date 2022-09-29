@@ -5,15 +5,18 @@
 #include <myfuck.hpp>
 #include <db.hpp>
 #include <socket.hpp>
-#include <utils.hpp>
+#include <base.hpp>
 
-#define DB_VERSION 10
+#define DB_VERSION 12
 
 using namespace std;
 
-typedef struct sqlite3 sqlite3;
+struct sqlite3;
 
 static sqlite3 *mDB = nullptr;
+
+#define DBLOGV(...)
+//#define DBLOGV(...) LOGD("myfuckdb: " __VA_ARGS__)
 
 // SQLite APIs
 
@@ -97,11 +100,12 @@ static bool dload_sqlite() {
     return true;
 }
 
-int db_strings::getKeyIdx(string_view key) const {
-    int idx = DB_STRING_NUM;
-    for (int i = 0; i < DB_STRING_NUM; ++i) {
-        if (key == DB_STRING_KEYS[i])
-            idx = i;
+int db_strings::get_idx(string_view key) const {
+    int idx = 0;
+    for (const char *k : DB_STRING_KEYS) {
+        if (key == k)
+            break;
+        ++idx;
     }
     return idx;
 }
@@ -111,14 +115,16 @@ db_settings::db_settings() {
     data[ROOT_ACCESS] = ROOT_ACCESS_APPS_AND_ADB;
     data[SU_MULTIUSER_MODE] = MULTIUSER_MODE_OWNER_ONLY;
     data[SU_MNT_NS] = NAMESPACE_MODE_REQUESTER;
-    data[HIDE_CONFIG] = false;
+    data[DENYLIST_CONFIG] = false;
+    data[ZYGISK_CONFIG] = false;
 }
 
-int db_settings::getKeyIdx(string_view key) const {
-    int idx = DB_SETTINGS_NUM;
-    for (int i = 0; i < DB_SETTINGS_NUM; ++i) {
-        if (key == DB_SETTING_KEYS[i])
-            idx = i;
+int db_settings::get_idx(string_view key) const {
+    int idx = 0;
+    for (const char *k : DB_SETTING_KEYS) {
+        if (key == k)
+            break;
+        ++idx;
     }
     return idx;
 }
@@ -138,61 +144,69 @@ static char *open_and_init_db(sqlite3 *&db) {
             SQLITE_OPEN_READWRITE | SQLITE_OPEN_CREATE | SQLITE_OPEN_FULLMUTEX, nullptr);
     if (ret)
         return strdup(sqlite3_errmsg(db));
-    int ver;
+    int ver = 0;
     bool upgrade = false;
-    char *err;
+    char *err = nullptr;
     sqlite3_exec(db, "PRAGMA user_version", ver_cb, &ver, &err);
     err_ret(err);
     if (ver > DB_VERSION) {
         // Don't support downgrading database
         sqlite3_close(db);
-        return nullptr;
+        return strdup("Downgrading database is not supported");
     }
-    if (ver < 3) {
-        // Policies
+
+    auto create_policy = [&] {
         sqlite3_exec(db,
                 "CREATE TABLE IF NOT EXISTS policies "
-                "(uid INT, package_name TEXT, policy INT, until INT, "
-                "logging INT, notification INT, PRIMARY KEY(uid))",
+                "(uid INT, policy INT, until INT, logging INT, "
+                "notification INT, PRIMARY KEY(uid))",
                 nullptr, nullptr, &err);
-        err_ret(err);
-        // Settings
+    };
+    auto create_settings = [&] {
         sqlite3_exec(db,
                 "CREATE TABLE IF NOT EXISTS settings "
                 "(key TEXT, value INT, PRIMARY KEY(key))",
                 nullptr, nullptr, &err);
-        err_ret(err);
-        ver = 3;
-        upgrade = true;
-    }
-    if (ver < 4) {
-        // Strings
+    };
+    auto create_strings = [&] {
         sqlite3_exec(db,
                 "CREATE TABLE IF NOT EXISTS strings "
                 "(key TEXT, value TEXT, PRIMARY KEY(key))",
                 nullptr, nullptr, &err);
-        err_ret(err);
-        ver = 4;
-        upgrade = true;
-    }
-    if (ver < 5) {
-        sqlite3_exec(db, "UPDATE policies SET uid=uid%100000", nullptr, nullptr, &err);
-        err_ret(err);
-        /* Directly jump to version 6 */
-        ver = 6;
-        upgrade = true;
-    }
-    if (ver < 7) {
+    };
+    auto create_denylist = [&] {
         sqlite3_exec(db,
-                "CREATE TABLE IF NOT EXISTS hidelist "
-                "(package_name TEXT, process TEXT, PRIMARY KEY(package_name, process));",
+                "CREATE TABLE IF NOT EXISTS denylist "
+                "(package_name TEXT, process TEXT, PRIMARY KEY(package_name, process))",
                 nullptr, nullptr, &err);
+    };
+
+    // Database changelog:
+    //
+    // 0 - 6: DB stored in app private data. There are no longer any code in the project to
+    //        migrate these data, so no need to take any of these versions into consideration.
+    // 7 : create table `hidelist` (process TEXT, PRIMARY KEY(process))
+    // 8 : add new column (package_name TEXT) to table `hidelist`
+    // 9 : rebuild table `hidelist` to change primary key (PRIMARY KEY(package_name, process))
+    // 10: remove table `logs`
+    // 11: remove table `hidelist` and create table `denylist` (same data structure)
+    // 12: rebuild table `policies` to drop column `package_name`
+
+    if (/* 0, 1, 2, 3, 4, 5, 6 */ ver <= 6) {
+        create_policy();
         err_ret(err);
-        /* Directly jump to version 9 */
-        ver = 9;
+        create_settings();
+        err_ret(err);
+        create_strings();
+        err_ret(err);
+        create_denylist();
+        err_ret(err);
+
+        // Directly jump to latest
+        ver = DB_VERSION;
         upgrade = true;
     }
-    if (ver < 8) {
+    if (ver == 7) {
         sqlite3_exec(db,
                 "BEGIN TRANSACTION;"
                 "ALTER TABLE hidelist RENAME TO hidelist_tmp;"
@@ -203,11 +217,11 @@ static char *open_and_init_db(sqlite3 *&db) {
                 "COMMIT;",
                 nullptr, nullptr, &err);
         err_ret(err);
-        /* Directly jump to version 9 */
+        // Directly jump to version 9
         ver = 9;
         upgrade = true;
     }
-    if (ver < 9) {
+    if (ver == 8) {
         sqlite3_exec(db,
                 "BEGIN TRANSACTION;"
                 "ALTER TABLE hidelist RENAME TO hidelist_tmp;"
@@ -221,10 +235,37 @@ static char *open_and_init_db(sqlite3 *&db) {
         ver = 9;
         upgrade = true;
     }
-    if (ver < 10) {
+    if (ver == 9) {
         sqlite3_exec(db, "DROP TABLE IF EXISTS logs", nullptr, nullptr, &err);
         err_ret(err);
         ver = 10;
+        upgrade = true;
+    }
+    if (ver == 10) {
+        sqlite3_exec(db,
+                "DROP TABLE IF EXISTS hidelist;"
+                "DELETE FROM settings WHERE key='myfuckhide';",
+                nullptr, nullptr, &err);
+        err_ret(err);
+        create_denylist();
+        err_ret(err);
+        ver = 11;
+        upgrade = true;
+    }
+    if (ver == 11) {
+        sqlite3_exec(db,
+                "BEGIN TRANSACTION;"
+                "ALTER TABLE policies RENAME TO policies_tmp;"
+                "CREATE TABLE IF NOT EXISTS policies "
+                "(uid INT, policy INT, until INT, logging INT, "
+                "notification INT, PRIMARY KEY(uid));"
+                "INSERT INTO policies "
+                "SELECT uid, policy, until, logging, notification FROM policies_tmp;"
+                "DROP TABLE policies_tmp;"
+                "COMMIT;",
+                nullptr, nullptr, &err);
+        err_ret(err);
+        ver = 12;
         upgrade = true;
     }
 
@@ -239,7 +280,7 @@ static char *open_and_init_db(sqlite3 *&db) {
 }
 
 char *db_exec(const char *sql) {
-    char *err;
+    char *err = nullptr;
     if (mDB == nullptr) {
         err = open_and_init_db(mDB);
         db_err_cmd(err,
@@ -256,8 +297,16 @@ char *db_exec(const char *sql) {
     return nullptr;
 }
 
+static int sqlite_db_row_callback(void *cb, int col_num, char **data, char **col_name) {
+    auto &func = *static_cast<const db_row_cb*>(cb);
+    db_row row;
+    for (int i = 0; i < col_num; ++i)
+        row[col_name[i]] = data[i];
+    return func(row) ? 0 : 1;
+}
+
 char *db_exec(const char *sql, const db_row_cb &fn) {
-    char *err;
+    char *err = nullptr;
     if (mDB == nullptr) {
         err = open_and_init_db(mDB);
         db_err_cmd(err,
@@ -268,103 +317,54 @@ char *db_exec(const char *sql, const db_row_cb &fn) {
         );
     }
     if (mDB) {
-        sqlite3_exec(mDB, sql, [](void *cb, int col_num, char **data, char **col_name) -> int {
-            auto &func = *reinterpret_cast<const db_row_cb*>(cb);
-            db_row row;
-            for (int i = 0; i < col_num; ++i)
-                row[col_name[i]] = data[i];
-            return func(row) ? 0 : 1;
-        }, (void *) &fn, &err);
+        sqlite3_exec(mDB, sql, sqlite_db_row_callback, (void *) &fn, &err);
         return err;
     }
     return nullptr;
 }
 
 int get_db_settings(db_settings &cfg, int key) {
-    char *err;
+    char *err = nullptr;
     auto settings_cb = [&](db_row &row) -> bool {
         cfg[row["key"]] = parse_int(row["value"]);
-        LOGD("myfuckdb: query %s=[%s]\n", row["key"].data(), row["value"].data());
+        DBLOGV("query %s=[%s]\n", row["key"].data(), row["value"].data());
         return true;
     };
     if (key >= 0) {
         char query[128];
-        sprintf(query, "SELECT key, value FROM settings WHERE key='%s'", DB_SETTING_KEYS[key]);
+        snprintf(query, sizeof(query), "SELECT * FROM settings WHERE key='%s'", DB_SETTING_KEYS[key]);
         err = db_exec(query, settings_cb);
     } else {
-        err = db_exec("SELECT key, value FROM settings", settings_cb);
+        err = db_exec("SELECT * FROM settings", settings_cb);
     }
     db_err_cmd(err, return 1);
     return 0;
 }
 
 int get_db_strings(db_strings &str, int key) {
-    char *err;
+    char *err = nullptr;
     auto string_cb = [&](db_row &row) -> bool {
         str[row["key"]] = row["value"];
+        DBLOGV("query %s=[%s]\n", row["key"].data(), row["value"].data());
         return true;
     };
     if (key >= 0) {
         char query[128];
-        sprintf(query, "SELECT key, value FROM strings WHERE key='%s'", DB_STRING_KEYS[key]);
+        snprintf(query, sizeof(query), "SELECT * FROM strings WHERE key='%s'", DB_STRING_KEYS[key]);
         err = db_exec(query, string_cb);
     } else {
-        err = db_exec("SELECT key, value FROM strings", string_cb);
+        err = db_exec("SELECT * FROM strings", string_cb);
     }
     db_err_cmd(err, return 1);
     return 0;
 }
 
-int get_uid_policy(su_access &su, int uid) {
-    char query[256], *err;
-    sprintf(query, "SELECT policy, logging, notification FROM policies "
-            "WHERE uid=%d AND (until=0 OR until>%li)", uid, time(nullptr));
-    err = db_exec(query, [&](db_row &row) -> bool {
-        su.policy = (policy_t) parse_int(row["policy"]);
-        su.log = parse_int(row["logging"]);
-        su.notify = parse_int(row["notification"]);
-        LOGD("myfuckdb: query policy=[%d] log=[%d] notify=[%d]\n", su.policy, su.log, su.notify);
-        return true;
-    });
-    db_err_cmd(err, return 1);
-    return 0;
-}
-
-bool check_manager(string *pkg) {
-    db_strings str;
-    get_db_strings(str, SU_MANAGER);
-    bool ret = validate_manager(str[SU_MANAGER], 0, nullptr);
-    if (pkg) {
-        if (ret)
-            pkg->swap(str[SU_MANAGER]);
-        else
-            *pkg = "xxx";  /* Make sure the return pkg can never exist */
-    }
-    return ret;
-}
-
-bool validate_manager(string &pkg, int userid, struct stat *st) {
-    struct stat tmp_st;
-    if (st == nullptr)
-        st = &tmp_st;
-
-    // Prefer DE storage
-    char app_path[128];
-    sprintf(app_path, "%s/%d/%s", APP_DATA_DIR, userid, pkg.data());
-    if (pkg.empty() || stat(app_path, st)) {
-        // Check the official package name
-        sprintf(app_path, "%s/%d/" JAVA_PACKAGE_NAME, APP_DATA_DIR, userid);
-        if (stat(app_path, st)) {
-            LOGE("su: cannot find manager\n");
-            memset(st, 0, sizeof(*st));
-            pkg.clear();
-            return false;
-        } else {
-            // Switch to official package if exists
-            pkg = JAVA_PACKAGE_NAME;
-        }
-    }
-    return true;
+void rm_db_strings(int key) {
+    char *err;
+    char query[128];
+    snprintf(query, sizeof(query), "DELETE FROM strings WHERE key == '%s'", DB_STRING_KEYS[key]);
+    err = db_exec(query);
+    db_err_cmd(err, return);
 }
 
 void exec_sql(int client) {

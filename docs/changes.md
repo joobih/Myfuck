@@ -1,5 +1,111 @@
 # Myfuck Changelog
 
+### v25.2
+
+- [MyfuckInit] Fix a potential issue when stub cpio is used
+- [MyfuckInit] Fix reboot to recovery when stub cpio is used
+- [MyfuckInit] Fix sepolicy.rules symlink for rootfs devices
+- [General] Better data encryption detection
+- [General] Move the whole logging infrastructure into Rust
+
+### v25.1
+
+- [MyfuckBoot] Fix ramdisk backup being incorrectly skipped
+- [MyfuckBoot] Add new feature to detect unsupported dtb and abort during installation
+- [Zygisk] Change binary hijack paths
+- [App] Fix incorrect recovery mode detection and installation
+- [MyfuckInit] Fix config not properly exported in legacy SAR devices
+- [General] Enforce the Myfuck app to always match or be newer than `myfuckd`
+
+### v25.0
+
+- [MyfuckInit] Update 2SI implementation, significantly increase device compatibility (e.g. Sony Xperia devices)
+- [MyfuckInit] Introduce new `sepolicy` injection mechanism
+- [MyfuckInit] Support Oculus Go
+- [MyfuckInit] Support Android 13 GKIs (Pixel 6)
+- [MyfuckBoot] Fix vbmeta extraction implementation
+- [App] Fix stub app on older Android versions
+- [App] [MyfuckSU] Properly support apps using `sharedUserId`
+- [MyfuckSU] Fix a possible crash in `myfuckd`
+- [MyfuckSU] Prune unused UIDs as soon as `system_server` restarts to prevent UID reuse attacks
+- [MyfuckSU] Verify and enforce the installed Myfuck app's certificate to match the distributor's signature
+- [MyfuckSU] [Zygisk] Proper package management and detection
+- [Zygisk] Fix function hooking on devices running Android 12 with old kernels
+- [Zygisk] Fix Zygisk's self code unloading implementation
+- [DenyList] Fix DenyList on shared UID apps
+- [BusyBox] Add workaround for devices running old kernels
+
+### v24.3
+
+- [General] Stop using `getrandom` syscall
+- [Zygisk] Update API to v3, adding new fields to `AppSpecializeArgs`
+- [App] Improve app repackaging installation workflow
+
+### v24.2
+
+- [MyfuckSU] Fix buffer overflow
+- [MyfuckSU] Fix owner managed multiuser superuser settings
+- [MyfuckSU] Fix command logging when using `su -c <cmd>`
+- [MyfuckSU] Prevent su request indefinite blocking
+- [MyfuckBoot] Support `lz4_legacy` archive with multiple magic
+- [MyfuckBoot] Fix `lz4_lg` compression
+- [DenyList] Allow targeting processes running as system UID
+- [Zygisk] Workaround Samsung's "early zygote"
+- [Zygisk] Improved Zygisk loading mechanism
+- [Zygisk] Fix application UID tracking
+- [Zygisk] Fix improper `umask` being set in zygote
+- [App] Fix BusyBox execution test
+- [App] Improve stub loading mechanism
+- [App] Major app upgrade flow improvements
+- [General] Improve commandline error handling and messaging
+
+### v24.1
+
+- [App] Stability improvements
+
+### v24.0
+
+- [General] MyfuckHide is removed from Myfuck
+- [General] Support Android 12
+- [General] Support devices that do not support 32-bit and only runs 64-bit code
+- [General] Update BusyBox to 1.34.1
+- [Zygisk] Introduce new feature: Zygisk
+- [Zygisk] Introduce DenyList feature to revert Myfuck features in user selected processes
+- [MyfuckBoot] Support patching 32-bit kernel zImages
+- [MyfuckBoot] Support boot image header v4
+- [MyfuckBoot] Support patching out `skip_initramfs` from dtb bootargs
+- [MyfuckBoot] Add new env variable `PATCHVBMETAFLAG` to configure whether vbmeta flags should be patched
+- [MyfuckInit] Support loading fstab from `/system/etc` (required for Pixel 6)
+- [MyfuckInit] Support `/proc/bootconfig` for loading boot configurations
+- [MyfuckInit] Better support for some Meizu devices
+- [MyfuckInit] Better support for some OnePlus/Oppo/Realme devices
+- [MyfuckInit] Support `init.real` on some Sony devices
+- [MyfuckInit] Skip loading Myfuck when detecting DSU
+- [MyfuckPolicy] Load `*_compat_cil_file` from system_ext
+- [MyfuckSU] Use isolated devpts if the kernel supports it
+- [MyfuckSU] Fix root shell if isolated mount namespace is set
+- [resetprop] Deleted properties are now wiped from memory instead of just unlinking
+- [App] Build a single APK for all ABIs
+- [App] Switch to use standard bottom navigation bar
+- [App] Downloading modules from the centralized Myfuck-Modules-Repo is removed
+- [App] Support user configuration of boot image vbmeta patching
+- [App] Restore the ability to install Myfuck on the other slot on some A/B devices
+- [App] Allow modules to specify an update URL for in-app update + install
+
+### v23.0
+
+- [App] Update snet extension. This fixes SafetyNet API errors.
+- [App] Fix a bug in the stub app that causes APK installation to fail
+- [App] Hide annoying errors in logs when hidden as stub
+- [App] Fix issues when patching ODIN tar files when the app is hidden
+- [General] Remove all pre Android 5.0 support
+- [General] Update BusyBox to use proper libc
+- [General] Fix C++ undefined behaviors
+- [General] Several `sepolicy.rule` copy/installation fixes
+- [MyfuckPolicy] Remove unnecessary sepolicy rules
+- [MyfuckHide] Update package and process name validation logic
+- [MyfuckHide] Some changes that prevents zygote deadlock
+
 ### v22.1
 
 - [App] Prevent multiple installation sessions running in parallel
@@ -101,6 +207,7 @@
 - [Scripts] Support Lineage Recovery for Android 10+
 
 ### v20.3
+
 - [MyfuckBoot] Fix `lz4_legacy` decompression
 
 ### v20.2
@@ -160,8 +267,8 @@
 - [General] Fix bootloops on some devices with tmpfs mounting to /data
 - [MyfuckInit] Add Kirin hi6250 support
 - [MyfuckSU] Stop claiming device focus for su logging/notify if feasible.
-This fix issues with users locking Myfuck Manager with app lock, and prevent
-video apps get messed up when an app is requesting root in the background.
+  This fix issues with users locking Myfuck Manager with app lock, and prevent
+  video apps get messed up when an app is requesting root in the background.
 
 ### v19.1
 
@@ -169,7 +276,7 @@ video apps get messed up when an app is requesting root in the background.
 - [General] Support Android Q Beta 2
 - [MyfuckInit] New sbin overlay setup process for better compatibility
 - [MyfuckInit] Allow long pressing volume up to boot to recovery in recovery mode
-- [MagicMount] Use proper system\_root mirror
+- [MagicMount] Use proper system_root mirror
 - [MagicMount] Use self created device nodes for mirrors
 - [MagicMount] Do not allow adding new files/folders in partition root folder (e.g. /system or /vendor)
 
@@ -242,7 +349,7 @@ video apps get messed up when an app is requesting root in the background.
 - [General] Bring back install to inactive slot for OTAs on A/B devices
 - [Script] Remove system based root in addon.d
 - [Script] Add proper addon.d-v2 for preserving Myfuck on custom ROMs on A/B devices
-- [Script] Enable KEEPVERITY when the device is using system\_root\_image
+- [Script] Enable KEEPVERITY when the device is using system_root_image
 - [Script] Add hexpatch to remove Samsung defex in new Oreo kernels
 - [Daemon] Support non ext4 filesystems for mirrors (system/vendor)
 - [MyfuckSU] Make pts sockets always run in dev_pts secontext, providing all terminal emulator root shell the same power as adb shells
@@ -289,7 +396,7 @@ video apps get messed up when an app is requesting root in the background.
 - [MyfuckInit] Remove `myfuckinit_daemon`, the actual myfuck daemon (myfuckd) shall handle everything itself
 - [Daemon] Remove post-fs stage as it is very limited and also will not work on A/B devices; replaced with simple mount in post-fs-data, which will run ASAP even before the daemon is started
 - [General] Remove all 64-bit binaries as there is no point in using them; all binaries are now 32-bit only.
-Some weirdly implemented root apps might break (e.g. Tasker, already reported to the developer), but it is not my fault :)
+  Some weirdly implemented root apps might break (e.g. Tasker, already reported to the developer), but it is not my fault :)
 - [resetprop] Add Protobuf encode/decode to support manipulating persist properties on Android P
 - [MyfuckHide] Include app sub-services as hiding targets. This might significantly increase the amount of apps that could be properly hidden
 
@@ -362,11 +469,11 @@ Some weirdly implemented root apps might break (e.g. Tasker, already reported to
 - [Daemon] Rewrite logcat monitor to be more efficient
 - [Daemon] Fix a bug where logcat monitor may spawn infinite logcat processes
 - [MyfuckSU] Update su to work the same as proper Linux implementation:
-Initialize window size; all environment variables will be migrated (except HOME, SHELL, USER, LOGNAME, these will be set accordingly),
-"--preserve-environment" option will preserve all variables, including those four exceptions.
-Check the Linux su manpage for more info
+  Initialize window size; all environment variables will be migrated (except HOME, SHELL, USER, LOGNAME, these will be set accordingly),
+  "--preserve-environment" option will preserve all variables, including those four exceptions.
+  Check the Linux su manpage for more info
 - [MyfuckBoot] Massive refactor, rewrite all cpio operations and CLI
-- [MyfuckInit][MyfuckBoot] Support ramdisk high compression mode
+- [MyfuckInit][myfuckboot] Support ramdisk high compression mode
 
 ### v14.5 (1456)
 
@@ -484,15 +591,15 @@ Check the Linux su manpage for more info
 
 - [General] Move most binaries into myfuck.img (Samsung cannot run su daemon in /data)
 - [General] Move sepolicy live patch to `late_start` service
-This shall fix the long boot times, especially on Samsung devices
+  This shall fix the long boot times, especially on Samsung devices
 - [General] Add Samsung RKP hexpatch back, should now work on Samsung stock kernels
 - [General] Fix installation with SuperSU
 - [MyfuckHide] Support other logcat `am_proc_start` patterns
 - [MyfuckHide] Change /sys/fs/selinux/enforce(policy) permissions if required
-Samsung devices cannot switch selinux states, if running on permissive custom kernel, the users will stuck at permissive
-If this scenario is detected, change permissions to hide the permissive state, leads to SafetyNet passes
+  Samsung devices cannot switch selinux states, if running on permissive custom kernel, the users will stuck at permissive
+  If this scenario is detected, change permissions to hide the permissive state, leads to SafetyNet passes
 - [MyfuckHide] Add built in prop rules to fake KNOX status
-Samsung apps requiring KNOX status to be 0x0 should now work (Samsung Pay not tested)
+  Samsung apps requiring KNOX status to be 0x0 should now work (Samsung Pay not tested)
 - [MyfuckHide] Remove all ro.build props, since they cause more issues than they benefit...
 - [MyfuckBoot] Add lz4 legacy format support (most linux kernel using lz4 for compression is using this)
 - [MyfuckBoot] Fix MTK kernels with MTK headers
@@ -517,27 +624,27 @@ Samsung apps requiring KNOX status to be 0x0 should now work (Samsung Pay not te
 ### v11.0
 
 - [Magic Mount] Support replacing symlinks.
-Symlinks cannot be a target of a bind mounted, so they are treated the same as new files
+  Symlinks cannot be a target of a bind mounted, so they are treated the same as new files
 - [Magic Mount] Fix the issue when file/folder name contains spaces
 - [BusyBox] Updated to v1.26.2. Should fix the black screen issues of FlashFire
 - [resetprop] Support reading prop files that contains spaces in prop values
 - [MyfuckSU] Adapt communication to Myfuck Manager; stripped out unused data transfer
 - [MyfuckSU] Implement SuperUser access option (Disable, APP only, ADB Only, APP & ADB)
-phh Superuser app has this option but the feature isn't implemented within the su binary
+  phh Superuser app has this option but the feature isn't implemented within the su binary
 - [MyfuckSU] Fixed all issues with su -c "commands" (run commands with root)
-This feature is supposed to only allow one single option, but apparently adb shell su -c "command" doesn't work this way, and plenty of root apps don't follow the rule. The su binary will now consider everything after -c as a part of the command.
+  This feature is supposed to only allow one single option, but apparently adb shell su -c "command" doesn't work this way, and plenty of root apps don't follow the rule. The su binary will now consider everything after -c as a part of the command.
 - [MyfuckSU] Removed legacy context hack for TiBack, what it currently does is slowing down the invocation
 - [MyfuckSU] Preserve the current working directory after invoking su
-Previously phh superuser will change the path to /data/data after obtaining root shell. It will now stay in the same directory where you called su
+  Previously phh superuser will change the path to /data/data after obtaining root shell. It will now stay in the same directory where you called su
 - [MyfuckSU] Daemon now also runs in u:r:su:s0 context
 - [MyfuckSU] Removed an unnecessary fork, reduce running processes and speed up the invocation
 - [MyfuckSU] Add -cn option to the binary
-Not sure if this is still relevant, and also not sure if implemented correctly, but hey it's here
+  Not sure if this is still relevant, and also not sure if implemented correctly, but hey it's here
 - [sepolicy-inject] Complete re-write the command-line options, now nearly matches supolicy syntax
 - [sepolicy-inject] Support all matching mode for nearly every action (makes pseudo enforced possible)
 - [sepolicy-inject] Fixed an ancient bug that allocated memory isn't reset
 - [uninstaller] Now works as a independent script that can be executed at boot
-Fully support recovery with no /data access, Myfuck uninstallation with Myfuck Manager
+  Fully support recovery with no /data access, Myfuck uninstallation with Myfuck Manager
 - [Addition] Busybox, MyfuckHide, hosts settings can now be applied instantly; no reboots required
 - [Addition] Add post-fs-data.d and service.d
 - [Addition] Add option to disable Myfuck (MyfuckSU will still be started)
@@ -632,4 +739,5 @@ Fully support recovery with no /data access, Myfuck uninstallation with Myfuck M
 - Removed Myfuck Manager in Myfuck patch, it is now included in Myfuck phh's superuser only
 
 ### v1
+
 - Initial release

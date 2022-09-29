@@ -8,8 +8,13 @@ run_delay() {
 
 env_check() {
   for file in busybox myfuckboot myfuckinit util_functions.sh boot_patch.sh; do
-    [ -f $MYFUCKBIN/$file ] || return 1
+    [ -f "$MYFUCKBIN/$file" ] || return 1
   done
+  if [ "$2" -ge 25000 ]; then
+    [ -f "$MYFUCKBIN/myfuckpolicy" ] || return 1
+  fi
+  grep -xqF "MYFUCK_VER='$1'" "$MYFUCKBIN/util_functions.sh" || return 1
+  grep -xqF "MYFUCK_VER_CODE=$2" "$MYFUCKBIN/util_functions.sh" || return 1
   return 0
 }
 
@@ -89,12 +94,13 @@ restore_imgs() {
 }
 
 post_ota() {
-  cd /data/adb
+  cd $NVBASE
   cp -f $1 bootctl
   rm -f $1
   chmod 755 bootctl
   ./bootctl hal-info || return
-  [ $(./bootctl get-current-slot) -eq 0 ] && SLOT_NUM=1 || SLOT_NUM=0
+  SLOT_NUM=0
+  [ $(./bootctl get-current-slot) -eq 0 ] && SLOT_NUM=1
   ./bootctl set-active-boot-slot $SLOT_NUM
   cat << EOF > post-fs-data.d/post_ota.sh
 /data/adb/bootctl mark-boot-successful
@@ -127,26 +133,26 @@ adb_pm_install() {
   local tmp=/data/local/tmp/temp.apk
   cp -f "$1" $tmp
   chmod 644 $tmp
-  su 2000 -c pm install $tmp || pm install $tmp
+  su 2000 -c pm install $tmp || pm install $tmp || su 1000 -c pm install $tmp
   local res=$?
   rm -f $tmp
+  # Note: change this will kill self
+  [ $res != 0 ] && appops set "$2" REQUEST_INSTALL_PACKAGES allow
   return $res
 }
 
 check_boot_ramdisk() {
   # Create boolean ISAB
-  [ -z $SLOT ] && ISAB=false || ISAB=true
-
-  # If we are running as recovery mode, then we do not have ramdisk
-  [ "$RECOVERYMODE" = "true" ] && return 1
+  ISAB=true
+  [ -z $SLOT ] && ISAB=false
 
   # If we are A/B, then we must have ramdisk
   $ISAB && return 0
 
   # If we are using legacy SAR, but not A/B, assume we do not have ramdisk
   if grep ' / ' /proc/mounts | grep -q '/dev/root'; then
-    # Override recovery mode to true if not set
-    [ -z $RECOVERYMODE ] && RECOVERYMODE=true
+    # Override recovery mode to true
+    RECOVERYMODE=true
     return 1
   fi
 
@@ -166,7 +172,8 @@ check_encryption() {
           CRYPTOTYPE="file"
         else
           # We are either FDE or metadata encryption (which is also FBE)
-          grep -q ' /metadata ' /proc/mounts && CRYPTOTYPE="file" || CRYPTOTYPE="block"
+          CRYPTOTYPE="block"
+          grep -q ' /metadata ' /proc/mounts && CRYPTOTYPE="file"
         fi
       fi
     fi
@@ -182,14 +189,25 @@ check_encryption() {
 mount_partitions() {
   [ "$(getprop ro.build.ab_update)" = "true" ] && SLOT=$(getprop ro.boot.slot_suffix)
   # Check whether non rootfs root dir exists
-  grep ' / ' /proc/mounts | grep -qv 'rootfs' && SYSTEM_ROOT=true || SYSTEM_ROOT=false
+  SYSTEM_ROOT=false
+  grep ' / ' /proc/mounts | grep -qv 'rootfs' && SYSTEM_ROOT=true
 }
 
 get_flags() {
   KEEPVERITY=$SYSTEM_ROOT
-  [ "$(getprop ro.crypto.state)" = "encrypted" ] && ISENCRYPTED=true || ISENCRYPTED=false
+  ISENCRYPTED=false
+  [ "$(getprop ro.crypto.state)" = "encrypted" ] && ISENCRYPTED=true
   KEEPFORCEENCRYPT=$ISENCRYPTED
-  # Do NOT preset RECOVERYMODE here
+  # Although this most certainly won't work without root, keep it just in case
+  if [ -e /dev/block/by-name/vbmeta_a ] || [ -e /dev/block/by-name/vbmeta ]; then
+    VBMETAEXIST=true
+  else
+    VBMETAEXIST=false
+  fi
+  # Preset PATCHVBMETAFLAG to false in the non-root case
+  PATCHVBMETAFLAG=false
+  # Make sure RECOVERYMODE has value
+  [ -z $RECOVERYMODE ] && RECOVERYMODE=false
 }
 
 run_migrations() { return; }
@@ -202,13 +220,12 @@ grep_prop() { return; }
 
 app_init() {
   mount_partitions
+  RAMDISKEXIST=false
+  check_boot_ramdisk && RAMDISKEXIST=true
   get_flags
   run_migrations
   SHA1=$(grep_prop SHA1 $MYFUCKTMP/config)
-  check_boot_ramdisk && RAMDISKEXIST=true || RAMDISKEXIST=false
   check_encryption
-  # Make sure RECOVERYMODE has value
-  [ -z $RECOVERYMODE ] && RECOVERYMODE=false
 }
 
 export BOOTMODE=true

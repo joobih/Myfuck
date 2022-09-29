@@ -8,12 +8,12 @@ import android.view.ViewGroup
 import android.widget.FrameLayout
 import com.topjohnwu.myfuck.BR
 import com.topjohnwu.myfuck.R
-import com.topjohnwu.myfuck.arch.BaseUIFragment
+import com.topjohnwu.myfuck.arch.BaseFragment
+import com.topjohnwu.myfuck.arch.viewModel
 import com.topjohnwu.myfuck.databinding.FragmentThemeMd2Binding
 import com.topjohnwu.myfuck.databinding.ItemThemeBindingImpl
-import com.topjohnwu.myfuck.di.viewModel
 
-class ThemeFragment : BaseUIFragment<ThemeViewModel, FragmentThemeMd2Binding>() {
+class ThemeFragment : BaseFragment<FragmentThemeMd2Binding>() {
 
     override val layoutRes = R.layout.fragment_theme_md2
     override val viewModel by viewModel<ThemeViewModel>()
@@ -34,7 +34,7 @@ class ThemeFragment : BaseUIFragment<ThemeViewModel, FragmentThemeMd2Binding>() 
         inflater: LayoutInflater,
         container: ViewGroup?,
         savedInstanceState: Bundle?
-    ): View? {
+    ): View {
         super.onCreateView(inflater, container, savedInstanceState)
 
         for ((a, b) in Theme.values().paired()) {
@@ -48,7 +48,7 @@ class ThemeFragment : BaseUIFragment<ThemeViewModel, FragmentThemeMd2Binding>() 
                 ItemThemeBindingImpl.inflate(LayoutInflater.from(themed), view, true).also {
                     it.setVariable(BR.viewModel, viewModel)
                     it.setVariable(BR.theme, theme)
-                    it.lifecycleOwner = this
+                    it.lifecycleOwner = viewLifecycleOwner
                 }
             }
 
@@ -61,7 +61,7 @@ class ThemeFragment : BaseUIFragment<ThemeViewModel, FragmentThemeMd2Binding>() 
     override fun onStart() {
         super.onStart()
 
-        activity.title = getString(R.string.section_theme)
+        activity?.title = getString(R.string.section_theme)
     }
 
 }

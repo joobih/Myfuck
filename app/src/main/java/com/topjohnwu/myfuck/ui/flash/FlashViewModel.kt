@@ -4,40 +4,43 @@ import android.view.MenuItem
 import androidx.databinding.Bindable
 import androidx.lifecycle.LiveData
 import androidx.lifecycle.MutableLiveData
+import androidx.lifecycle.Transformations
 import androidx.lifecycle.viewModelScope
 import com.topjohnwu.myfuck.BR
 import com.topjohnwu.myfuck.R
 import com.topjohnwu.myfuck.arch.BaseViewModel
-import com.topjohnwu.myfuck.arch.diffListOf
-import com.topjohnwu.myfuck.arch.itemBindingOf
 import com.topjohnwu.myfuck.core.Const
 import com.topjohnwu.myfuck.core.Info
 import com.topjohnwu.myfuck.core.tasks.FlashZip
 import com.topjohnwu.myfuck.core.tasks.MyfuckInstaller
 import com.topjohnwu.myfuck.core.utils.MediaStoreUtils
 import com.topjohnwu.myfuck.core.utils.MediaStoreUtils.outputStream
-import com.topjohnwu.myfuck.databinding.RvBindingAdapter
+import com.topjohnwu.myfuck.databinding.diffListOf
+import com.topjohnwu.myfuck.databinding.set
 import com.topjohnwu.myfuck.events.SnackbarEvent
-import com.topjohnwu.myfuck.ktx.*
-import com.topjohnwu.myfuck.utils.set
-import com.topjohnwu.myfuck.view.Notifications
+import com.topjohnwu.myfuck.ktx.reboot
+import com.topjohnwu.myfuck.ktx.synchronized
+import com.topjohnwu.myfuck.ktx.timeFormatStandard
+import com.topjohnwu.myfuck.ktx.toTime
 import com.topjohnwu.superuser.CallbackList
-import com.topjohnwu.superuser.Shell
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
 
 class FlashViewModel : BaseViewModel() {
 
+    enum class State {
+        FLASHING, SUCCESS, FAILED
+    }
+
+    private val _state = MutableLiveData(State.FLASHING)
+    val state: LiveData<State> get() = _state
+    val flashing = Transformations.map(state) { it == State.FLASHING }
+
     @get:Bindable
-    var showReboot = Shell.rootAccess()
+    var showReboot = Info.isRooted
         set(value) = set(value, field, { field = it }, BR.showReboot)
 
-    private val _subtitle = MutableLiveData(R.string.flashing)
-    val subtitle get() = _subtitle as LiveData<Int>
-
-    val adapter = RvBindingAdapter<ConsoleItem>()
     val items = diffListOf<ConsoleItem>()
-    val itemBinding = itemBindingOf<ConsoleItem>()
     lateinit var args: FlashFragmentArgs
 
     private val logItems = mutableListOf<String>().synchronized()
@@ -50,14 +53,13 @@ class FlashViewModel : BaseViewModel() {
     }
 
     fun startFlashing() {
-        val (action, uri, id) = args
-        if (id != -1)
-            Notifications.mgr.cancel(id)
+        val (action, uri) = args
 
         viewModelScope.launch {
             val result = when (action) {
                 Const.Value.FLASH_ZIP -> {
-                    FlashZip(uri!!, outItems, logItems).exec()
+                    uri ?: return@launch
+                    FlashZip(uri, outItems, logItems).exec()
                 }
                 Const.Value.UNINSTALL -> {
                     showReboot = false
@@ -87,11 +89,7 @@ class FlashViewModel : BaseViewModel() {
     }
 
     private fun onResult(success: Boolean) {
-        state = if (success) State.LOADED else State.LOADING_FAILED
-        when {
-            success -> _subtitle.postValue(R.string.done)
-            else -> _subtitle.postValue(R.string.failure)
-        }
+        _state.value = if (success) State.SUCCESS else State.FAILED
     }
 
     fun onMenuItemClicked(item: MenuItem): Boolean {
@@ -103,12 +101,16 @@ class FlashViewModel : BaseViewModel() {
 
     private fun savePressed() = withExternalRW {
         viewModelScope.launch(Dispatchers.IO) {
-            val name = "myfuck_install_log_%s.log".format(now.toTime(timeFormatStandard))
+            val name = "myfuck_install_log_%s.log".format(
+                System.currentTimeMillis().toTime(timeFormatStandard)
+            )
             val file = MediaStoreUtils.getFile(name, true)
             file.uri.outputStream().bufferedWriter().use { writer ->
-                logItems.forEach {
-                    writer.write(it)
-                    writer.newLine()
+                synchronized(logItems) {
+                    logItems.forEach {
+                        writer.write(it)
+                        writer.newLine()
+                    }
                 }
             }
             SnackbarEvent(file.toString()).publish()

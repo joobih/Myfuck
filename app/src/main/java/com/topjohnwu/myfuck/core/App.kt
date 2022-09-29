@@ -1,39 +1,34 @@
 package com.topjohnwu.myfuck.core
 
-import android.annotation.SuppressLint
 import android.app.Activity
 import android.app.Application
 import android.content.Context
 import android.content.res.Configuration
 import android.os.Bundle
-import androidx.appcompat.app.AppCompatDelegate
-import androidx.work.WorkManager
-import com.topjohnwu.myfuck.DynAPK
-import com.topjohnwu.myfuck.core.utils.AppShellInit
-import com.topjohnwu.myfuck.core.utils.BusyBoxInit
-import com.topjohnwu.myfuck.core.utils.IODispatcherExecutor
-import com.topjohnwu.myfuck.core.utils.updateConfig
-import com.topjohnwu.myfuck.di.ServiceLocator
-import com.topjohnwu.myfuck.ktx.unwrap
+import com.topjohnwu.myfuck.StubApk
+import com.topjohnwu.myfuck.core.di.ServiceLocator
+import com.topjohnwu.myfuck.core.utils.*
+import com.topjohnwu.myfuck.ui.surequest.SuRequestActivity
 import com.topjohnwu.superuser.Shell
+import com.topjohnwu.superuser.internal.UiThreadHandler
+import com.topjohnwu.superuser.ipc.RootService
+import kotlinx.coroutines.Dispatchers
 import timber.log.Timber
-import java.io.File
+import java.lang.ref.WeakReference
 import kotlin.system.exitProcess
 
 open class App() : Application() {
 
     constructor(o: Any) : this() {
-        Info.stub = DynAPK.load(o)
+        val data = StubApk.Data(o)
+        // Add the root service name mapping
+        data.classToComponent[RootUtils::class.java.name] = data.rootService.name
+        // Send back the actual root service class
+        data.rootService = RootUtils::class.java
+        Info.stub = data
     }
 
     init {
-        AppCompatDelegate.setCompatVectorFromResourcesEnabled(true)
-        Shell.setDefaultBuilder(Shell.Builder.create()
-            .setFlags(Shell.FLAG_MOUNT_MASTER)
-            .setInitializers(BusyBoxInit::class.java, AppShellInit::class.java)
-            .setTimeout(2))
-        Shell.EXECUTOR = IODispatcherExecutor()
-
         // Always log full stack trace with Timber
         Timber.plant(Timber.DebugTree())
         Thread.setDefaultUncaughtExceptionHandler { _, e ->
@@ -42,58 +37,65 @@ open class App() : Application() {
         }
     }
 
-    override fun attachBaseContext(base: Context) {
-        // Some context magic
+    override fun attachBaseContext(context: Context) {
+        // Get the actual ContextImpl
         val app: Application
-        val impl: Context
-        if (base is Application) {
-            app = base
-            impl = base.baseContext
+        val base: Context
+        if (context is Application) {
+            app = context
+            base = context.baseContext
+            AppApkPath = StubApk.current(base).path
         } else {
             app = this
-            impl = base
+            base = context
+            AppApkPath = base.packageResourcePath
         }
-        val wrapped = impl.wrap()
-        super.attachBaseContext(wrapped)
+        super.attachBaseContext(base)
+        ServiceLocator.context = base
+        app.registerActivityLifecycleCallbacks(ActivityTracker)
 
-        val info = base.applicationInfo
-        val libDir = runCatching {
-            info.javaClass.getDeclaredField("secondaryNativeLibraryDir").get(info) as String?
-        }.getOrNull() ?: info.nativeLibraryDir
-        Const.NATIVE_LIB_DIR = File(libDir)
+        Shell.setDefaultBuilder(Shell.Builder.create()
+            .setFlags(Shell.FLAG_MOUNT_MASTER)
+            .setInitializers(ShellInit::class.java)
+            .setContext(base)
+            .setTimeout(2))
+        Shell.EXECUTOR = DispatcherExecutor(Dispatchers.IO)
+        RootUtils.bindTask = RootService.bindOrTask(
+            intent<RootUtils>(),
+            UiThreadHandler.executor,
+            RootUtils.Connection
+        )
+        // Pre-heat the shell ASAP
+        Shell.getShell(null) {}
 
-        ServiceLocator.context = wrapped
-        AssetHack.init(impl)
-        app.registerActivityLifecycleCallbacks(ForegroundTracker)
-        WorkManager.initialize(impl.wrapJob(), androidx.work.Configuration.Builder().build())
-    }
-
-    // This is required as some platforms expect ContextImpl
-    override fun getBaseContext(): Context {
-        return super.getBaseContext().unwrap()
+        refreshLocale()
+        resources.patch()
     }
 
     override fun onConfigurationChanged(newConfig: Configuration) {
-        resources.updateConfig(newConfig)
+        if (resources.configuration.diff(newConfig) != 0) {
+            resources.setConfig(newConfig)
+        }
         if (!isRunningAsStub)
             super.onConfigurationChanged(newConfig)
     }
 }
 
-@SuppressLint("StaticFieldLeak")
-object ForegroundTracker : Application.ActivityLifecycleCallbacks {
+object ActivityTracker : Application.ActivityLifecycleCallbacks {
+
+    val foreground: Activity? get() = ref.get()
 
     @Volatile
-    var foreground: Activity? = null
-
-    val hasForeground get() = foreground != null
+    private var ref = WeakReference<Activity>(null)
 
     override fun onActivityResumed(activity: Activity) {
-        foreground = activity
+        if (activity is SuRequestActivity) return
+        ref = WeakReference(activity)
     }
 
     override fun onActivityPaused(activity: Activity) {
-        foreground = null
+        if (activity is SuRequestActivity) return
+        ref.clear()
     }
 
     override fun onActivityCreated(activity: Activity, bundle: Bundle?) {}

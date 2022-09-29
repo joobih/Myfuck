@@ -1,7 +1,7 @@
 package com.topjohnwu.myfuck.events.dialog
 
 import com.topjohnwu.myfuck.arch.ActivityExecutor
-import com.topjohnwu.myfuck.arch.BaseUIActivity
+import com.topjohnwu.myfuck.arch.UIActivity
 import com.topjohnwu.myfuck.arch.ViewEvent
 import com.topjohnwu.myfuck.core.utils.BiometricHelper
 
@@ -16,7 +16,7 @@ class BiometricEvent(
         builder(Builder())
     }
 
-    override fun invoke(activity: BaseUIActivity<*, *>) {
+    override fun invoke(activity: UIActivity<*>) {
         BiometricHelper.authenticate(
             activity,
             onError = listenerOnFailure,

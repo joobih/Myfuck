@@ -1,6 +1,6 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
-    <string name="upgrade_msg">Оновіть Myfuck Manager для завершення встановлення. Завантажити і встановити?</string>
-    <string name="no_internet_msg">Будь ласка, підключіться до Інтернету! Потрібно оновити Myfuck Manager.</string>
+    <string name="upgrade_msg">Оновіть додаток Myfuck для завершення встановлення. Завантажити і встановити?</string>
+    <string name="no_internet_msg">Будь ласка, підключіться до Інтернету! Потрібно оновити додаток Myfuck.</string>
     <string name="dling">Завантаження</string>
 </resources>

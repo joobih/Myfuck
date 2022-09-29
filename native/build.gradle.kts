@@ -2,7 +2,10 @@ plugins {
     id("com.android.library")
 }
 
+setupCommon()
+
 android {
+    namespace = "com.topjohnwu.myfuck.native"
 
     externalNativeBuild {
         ndkBuild {
@@ -14,8 +17,9 @@ android {
         externalNativeBuild {
             ndkBuild {
                 // Pass arguments to ndk-build.
-                arguments("B_MYFUCK=1", "B_INIT=1", "B_BOOT=1", "B_TEST=1",
-                        "MYFUCK_DEBUG=1", "MYFUCK_VERSION=debug", "MYFUCK_VER_CODE=INT_MAX")
+                arguments(
+                    "B_MYFUCK=1", "B_INIT=1", "B_BOOT=1", "B_TEST=1", "B_POLICY=1", "B_PRELOAD=1"
+                )
             }
         }
     }

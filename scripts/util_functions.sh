@@ -22,7 +22,9 @@ toupper() {
 
 grep_cmdline() {
   local REGEX="s/^$1=//p"
-  cat /proc/cmdline | tr '[:space:]' '\n' | sed -n "$REGEX" 2>/dev/null
+  { echo $(cat /proc/cmdline)$(sed -e 's/[^"]//g' -e 's/""//g' /proc/cmdline) | xargs -n 1; \
+    sed -e 's/ = /=/g' -e 's/, /,/g' -e 's/"//g' /proc/bootconfig; \
+  } 2>/dev/null | sed -n "$REGEX"
 }
 
 grep_prop() {
@@ -72,17 +74,17 @@ resolve_vars() {
 }
 
 print_title() {
-  local len line1len line2len pounds
+  local len line1len line2len bar
   line1len=$(echo -n $1 | wc -c)
   line2len=$(echo -n $2 | wc -c)
   len=$line2len
   [ $line1len -gt $line2len ] && len=$line1len
   len=$((len + 2))
-  pounds=$(printf "%${len}s" | tr ' ' '*')
-  ui_print "$pounds"
+  bar=$(printf "%${len}s" | tr ' ' '*')
+  ui_print "$bar"
   ui_print " $1 "
   [ "$2" ] && ui_print " $2 "
-  ui_print "$pounds"
+  ui_print "$bar"
 }
 
 ######################
@@ -293,6 +295,13 @@ mount_partitions() {
 
   # Allow /system/bin commands (dalvikvm) on Android 10+ in recovery
   $BOOTMODE || mount_apex
+
+  # Mount sepolicy rules dir locations in recovery (best effort)
+  if ! $BOOTMODE; then
+    mount_name "cache cac" /cache
+    mount_name metadata /metadata
+    mount_name persist /persist
+  fi
 }
 
 # loop_setup <ext4_img>, sets LOOPDEV
@@ -321,6 +330,9 @@ mount_apex() {
   local PATTERN='s/.*"name":[^"]*"\([^"]*\).*/\1/p'
   for APEX in /system/apex/*; do
     if [ -f $APEX ]; then
+      # handle CAPEX APKs, extract actual APEX APK first
+      unzip -qo $APEX original_apex -d /apex
+      [ -f /apex/original_apex ] && APEX=/apex/original_apex # unzip doesn't do return codes
       # APEX APKs, extract and loop mount
       unzip -qo $APEX apex_payload.img -d /apex
       DEST=$(unzip -qp $APEX apex_manifest.pb | strings | head -n 1)
@@ -333,7 +345,7 @@ mount_apex() {
         ui_print "- Mounting $DEST"
         mount -t ext4 -o ro,noatime $LOOPDEV $DEST
       fi
-      rm -f /apex/apex_payload.img
+      rm -f /apex/original_apex /apex/apex_payload.img
     elif [ -d $APEX ]; then
       # APEX folders, bind mount directory
       if [ -f $APEX/apex_manifest.json ]; then
@@ -372,11 +384,14 @@ umount_apex() {
   unset BOOTCLASSPATH
 }
 
+# After calling this method, the following variables will be set:
+# KEEPVERITY, KEEPFORCEENCRYPT, RECOVERYMODE, PATCHVBMETAFLAG,
+# ISENCRYPTED, VBMETAEXIST
 get_flags() {
-  # override variables
   getvar KEEPVERITY
   getvar KEEPFORCEENCRYPT
   getvar RECOVERYMODE
+  getvar PATCHVBMETAFLAG
   if [ -z $KEEPVERITY ]; then
     if $SYSTEM_ROOT; then
       KEEPVERITY=true
@@ -397,21 +412,32 @@ get_flags() {
       KEEPFORCEENCRYPT=false
     fi
   fi
+  VBMETAEXIST=false
+  local VBMETAIMG=$(find_block vbmeta vbmeta_a)
+  [ -n "$VBMETAIMG" ] && VBMETAEXIST=true
+  if [ -z $PATCHVBMETAFLAG ]; then
+    if $VBMETAEXIST; then
+      PATCHVBMETAFLAG=false
+    else
+      PATCHVBMETAFLAG=true
+      ui_print "- No vbmeta partition, patch vbmeta in boot image"
+    fi
+  fi
   [ -z $RECOVERYMODE ] && RECOVERYMODE=false
 }
 
 find_boot_image() {
   BOOTIMAGE=
   if $RECOVERYMODE; then
-    BOOTIMAGE=`find_block recovery_ramdisk$SLOT recovery$SLOT sos`
+    BOOTIMAGE=$(find_block "recovery_ramdisk$SLOT" "recovery$SLOT" "sos")
   elif [ ! -z $SLOT ]; then
-    BOOTIMAGE=`find_block ramdisk$SLOT recovery_ramdisk$SLOT boot$SLOT`
+    BOOTIMAGE=$(find_block "ramdisk$SLOT" "recovery_ramdisk$SLOT" "init_boot$SLOT" "boot$SLOT")
   else
-    BOOTIMAGE=`find_block ramdisk recovery_ramdisk kern-a android_boot kernel bootimg boot lnx boot_a`
+    BOOTIMAGE=$(find_block ramdisk recovery_ramdisk kern-a android_boot kernel bootimg init_boot boot lnx boot_a)
   fi
   if [ -z $BOOTIMAGE ]; then
     # Lets see what fstabs tells me
-    BOOTIMAGE=`grep -v '#' /etc/*fstab* | grep -E '/boot(img)?[^a-zA-Z]' | grep -oE '/dev/[a-zA-Z0-9_./-]*' | head -n 1`
+    BOOTIMAGE=$(grep -v '#' /etc/*fstab* | grep -E '/boot(img)?[^a-zA-Z]' | grep -oE '/dev/[a-zA-Z0-9_./-]*' | head -n 1)
   fi
 }
 
@@ -519,17 +545,25 @@ remove_system_su() {
 
 api_level_arch_detect() {
   API=$(grep_get_prop ro.build.version.sdk)
-  ABI=$(grep_get_prop ro.product.cpu.abi | cut -c-3)
-  ABI2=$(grep_get_prop ro.product.cpu.abi2 | cut -c-3)
-  ABILONG=$(grep_get_prop ro.product.cpu.abi)
-
-  ARCH=arm
-  ARCH32=arm
-  IS64BIT=false
-  if [ "$ABI" = "x86" ]; then ARCH=x86; ARCH32=x86; fi;
-  if [ "$ABI2" = "x86" ]; then ARCH=x86; ARCH32=x86; fi;
-  if [ "$ABILONG" = "arm64-v8a" ]; then ARCH=arm64; ARCH32=arm; IS64BIT=true; fi;
-  if [ "$ABILONG" = "x86_64" ]; then ARCH=x64; ARCH32=x86; IS64BIT=true; fi;
+  ABI=$(grep_get_prop ro.product.cpu.abi)
+  if [ "$ABI" = "x86" ]; then
+    ARCH=x86
+    ABI32=x86
+    IS64BIT=false
+  elif [ "$ABI" = "arm64-v8a" ]; then
+    ARCH=arm64
+    ABI32=armeabi-v7a
+    IS64BIT=true
+  elif [ "$ABI" = "x86_64" ]; then
+    ARCH=x64
+    ABI32=x86
+    IS64BIT=true
+  else
+    ARCH=arm
+    ABI=armeabi-v7a
+    ABI32=armeabi-v7a
+    IS64BIT=false
+  fi
 }
 
 check_data() {
@@ -550,16 +584,13 @@ check_data() {
 
 find_myfuck_apk() {
   local DBAPK
-  [ -z $APK ] && APK=/data/adb/myfuck.apk
-  [ -f $APK ] || APK=/data/myfuck/myfuck.apk
-  [ -f $APK ] || APK=/data/app/com.topjohnwu.myfuck*/*.apk
-  [ -f $APK ] || APK=/data/app/*/com.topjohnwu.myfuck*/*.apk
+  [ -z $APK ] && APK=/data/app/com.topjohnwu.myfuck*/base.apk
+  [ -f $APK ] || APK=/data/app/*/com.topjohnwu.myfuck*/base.apk
   if [ ! -f $APK ]; then
     DBAPK=$(myfuck --sqlite "SELECT value FROM strings WHERE key='requester'" 2>/dev/null | cut -d= -f2)
-    [ -z $DBAPK ] && DBAPK=$(strings /data/adb/myfuck.db | grep -oE 'requester..*' | cut -c10-)
-    [ -z $DBAPK ] || APK=/data/user_de/*/$DBAPK/dyn/*.apk
-    [ -f $APK ] || [ -z $DBAPK ] || APK=/data/app/$DBAPK*/*.apk
-    [ -f $APK ] || [ -z $DBAPK ] || APK=/data/app/*/$DBAPK*/*.apk
+    [ -z $DBAPK ] && DBAPK=$(strings $NVBASE/myfuck.db | grep -oE 'requester..*' | cut -c10-)
+    [ -z $DBAPK ] || APK=/data/user_de/0/$DBAPK/dyn/current.apk
+    [ -f $APK ] || [ -z $DBAPK ] || APK=/data/data/$DBAPK/dyn/current.apk
   fi
   [ -f $APK ] || ui_print "! Unable to detect Myfuck app APK for BootSigner"
 }
@@ -568,7 +599,7 @@ run_migrations() {
   local LOCSHA1
   local TARGET
   # Legacy app installation
-  local BACKUP=/data/adb/myfuck/stock_boot*.gz
+  local BACKUP=$MYFUCKBIN/stock_boot*.gz
   if [ -f $BACKUP ]; then
     cp $BACKUP /data
     rm -f $BACKUP
@@ -586,7 +617,7 @@ run_migrations() {
   # Stock backups
   LOCSHA1=$SHA1
   for name in boot dtb dtbo dtbs; do
-    BACKUP=/data/adb/myfuck/stock_${name}.img
+    BACKUP=$MYFUCKBIN/stock_${name}.img
     [ -f $BACKUP ] || continue
     if [ $name = 'boot' ]; then
       LOCSHA1=`$MYFUCKBIN/myfuckboot sha1 $BACKUP`
@@ -605,26 +636,36 @@ copy_sepolicy_rules() {
 
   # Find current active RULESDIR
   local RULESDIR
-  local active_dir=$(myfuck --path)/.myfuck/mirror/sepolicy.rules
-  if [ -L $active_dir ]; then
-    RULESDIR=$(readlink $active_dir)
+  local ACTIVEDIR=$(myfuck --path)/.myfuck/mirror/sepolicy.rules
+  if [ -L $ACTIVEDIR ]; then
+    RULESDIR=$(readlink $ACTIVEDIR)
     [ "${RULESDIR:0:1}" != "/" ] && RULESDIR="$(myfuck --path)/.myfuck/mirror/$RULESDIR"
+  elif ! $ISENCRYPTED; then
+    RULESDIR=$NVBASE/modules
   elif [ -d /data/unencrypted ] && ! grep ' /data ' /proc/mounts | grep -qE 'dm-|f2fs'; then
     RULESDIR=/data/unencrypted/myfuck
-  elif grep -q ' /cache ' /proc/mounts; then
+  elif grep ' /cache ' /proc/mounts | grep -q 'ext4' ; then
     RULESDIR=/cache/myfuck
-  elif grep -q ' /metadata ' /proc/mounts; then
+  elif grep ' /metadata ' /proc/mounts | grep -q 'ext4' ; then
     RULESDIR=/metadata/myfuck
-  elif grep -q ' /persist ' /proc/mounts; then
+  elif grep ' /persist ' /proc/mounts | grep -q 'ext4' ; then
     RULESDIR=/persist/myfuck
-  elif grep -q ' /mnt/vendor/persist ' /proc/mounts; then
+  elif grep ' /mnt/vendor/persist ' /proc/mounts | grep -q 'ext4' ; then
     RULESDIR=/mnt/vendor/persist/myfuck
   else
-    return
+    ui_print "- Unable to find sepolicy rules dir"
+    return 1
+  fi
+
+  if [ -d ${RULESDIR%/myfuck} ]; then
+    echo "RULESDIR=$RULESDIR" >&2
+  else
+    ui_print "- Unable to find sepolicy rules dir ${RULESDIR%/myfuck}"
+    return 1
   fi
 
   # Copy all enabled sepolicy.rule
-  for r in /data/adb/modules*/*/sepolicy.rule; do
+  for r in $NVBASE/modules*/*/sepolicy.rule; do
     [ -f "$r" ] || continue
     local MODDIR=${r%/*}
     [ -f $MODDIR/disable ] && continue
@@ -642,7 +683,7 @@ copy_sepolicy_rules() {
 set_perm() {
   chown $2:$3 $1 || return 1
   chmod $4 $1 || return 1
-  CON=$5
+  local CON=$5
   [ -z $CON ] && CON=u:object_r:system_file:s0
   chcon $CON $1 || return 1
 }
@@ -682,6 +723,7 @@ is_legacy_script() {
 install_module() {
   rm -rf $TMPDIR
   mkdir -p $TMPDIR
+  chcon u:object_r:system_file:s0 $TMPDIR
   cd $TMPDIR
 
   setup_flashable
@@ -742,6 +784,10 @@ install_module() {
 
       # Default permissions
       set_perm_recursive $MODPATH 0 0 0755 0644
+      set_perm_recursive $MODPATH/system/bin 0 2000 0755 0755
+      set_perm_recursive $MODPATH/system/xbin 0 2000 0755 0755
+      set_perm_recursive $MODPATH/system/system_ext/bin 0 2000 0755 0755
+      set_perm_recursive $MODPATH/system/vendor/bin 0 2000 0755 0755 u:object_r:vendor_file:s0
     fi
 
     # Load customization script
@@ -757,6 +803,8 @@ install_module() {
   if $BOOTMODE; then
     # Update info for Myfuck app
     mktouch $NVBASE/modules/$MODID/update
+    rm -rf $NVBASE/modules/$MODID/remove 2>/dev/null
+    rm -rf $NVBASE/modules/$MODID/disable 2>/dev/null
     cp -af $MODPATH/module.prop $NVBASE/modules/$MODID/module.prop
   fi
 
@@ -770,7 +818,7 @@ install_module() {
   rm -rf \
   $MODPATH/system/placeholder $MODPATH/customize.sh \
   $MODPATH/README.md $MODPATH/.git*
-  rmdir -p $MODPATH
+  rmdir -p $MODPATH 2>/dev/null
 
   cd /
   $BOOTMODE || recovery_cleanup
@@ -792,7 +840,7 @@ NVBASE=/data/adb
 TMPDIR=/dev/tmp
 
 # Bootsigner related stuff
-BOOTSIGNERCLASS=com.topjohnwu.signing.SignBoot
+BOOTSIGNERCLASS=com.topjohnwu.myfuck.signing.SignBoot
 BOOTSIGNER='/system/bin/dalvikvm -Xnoimage-dex2oat -cp $APK $BOOTSIGNERCLASS'
 BOOTSIGNED=false
 

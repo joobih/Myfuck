@@ -2,10 +2,10 @@ package com.topjohnwu.myfuck.events.dialog
 
 import com.topjohnwu.myfuck.R
 import com.topjohnwu.myfuck.core.Info
+import com.topjohnwu.myfuck.core.di.AppContext
+import com.topjohnwu.myfuck.core.di.ServiceLocator
 import com.topjohnwu.myfuck.core.download.DownloadService
 import com.topjohnwu.myfuck.core.download.Subject
-import com.topjohnwu.myfuck.di.AppContext
-import com.topjohnwu.myfuck.di.ServiceLocator
 import com.topjohnwu.myfuck.view.MyfuckDialog
 import java.io.File
 
@@ -25,14 +25,14 @@ class ManagerInstallDialog : MarkDownDialog() {
 
     override fun build(dialog: MyfuckDialog) {
         super.build(dialog)
-        with(dialog) {
+        dialog.apply {
             setCancelable(true)
-            applyButton(MyfuckDialog.ButtonType.POSITIVE) {
-                titleRes = R.string.install
-                onClick { DownloadService.start(context, Subject.Manager()) }
+            setButton(MyfuckDialog.ButtonType.POSITIVE) {
+                text = R.string.install
+                onClick { DownloadService.start(context, Subject.App()) }
             }
-            applyButton(MyfuckDialog.ButtonType.NEGATIVE) {
-                titleRes = android.R.string.cancel
+            setButton(MyfuckDialog.ButtonType.NEGATIVE) {
+                text = android.R.string.cancel
             }
         }
     }

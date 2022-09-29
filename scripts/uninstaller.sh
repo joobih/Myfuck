@@ -40,12 +40,6 @@ is_mounted /data || mount /data || abort "! Unable to mount /data, please uninst
 mount_partitions
 check_data
 $DATA_DE || abort "! Cannot access /data, please uninstall with the Myfuck app"
-if ! $BOOTMODE; then
-  # Mounting stuffs in recovery (best effort)
-  mount_name metadata /metadata
-  mount_name "cache cac" /cache
-  mount_name persist /persist
-fi
 get_flags
 find_boot_image
 
@@ -55,15 +49,14 @@ ui_print "- Target image: $BOOTIMAGE"
 # Detect version and architecture
 api_level_arch_detect
 
-ui_print "- Device platform: $ARCH"
+ui_print "- Device platform: $ABI"
 
-BINDIR=$INSTALLER/lib/$ARCH32
-[ ! -d "$BINDIR" ] && BINDIR=$INSTALLER/lib/armeabi-v7a
+BINDIR=$INSTALLER/lib/$ABI
 cd $BINDIR
 for file in lib*.so; do mv "$file" "${file:3:${#file}-6}"; done
 cd /
-chmod -R 755 $CHROMEDIR $BINDIR
 cp -af $CHROMEDIR/. $BINDIR/chromeos
+chmod -R 755 $BINDIR
 
 ############
 # Uninstall

@@ -1,5 +1,6 @@
 package com.topjohnwu.myfuck.utils
 
+import android.content.ActivityNotFoundException
 import android.content.Context
 import android.content.Intent
 import android.net.Uri
@@ -8,7 +9,7 @@ import com.topjohnwu.myfuck.R
 import com.topjohnwu.myfuck.core.Config
 import com.topjohnwu.myfuck.core.Const
 import com.topjohnwu.myfuck.core.Info
-import com.topjohnwu.myfuck.di.AppContext
+import com.topjohnwu.myfuck.core.di.AppContext
 import com.topjohnwu.superuser.internal.UiThreadHandler
 
 object Utils {
@@ -29,13 +30,10 @@ object Utils {
     fun openLink(context: Context, link: Uri) {
         val intent = Intent(Intent.ACTION_VIEW, link)
         intent.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
-        if (intent.resolveActivity(context.packageManager) != null) {
+        try {
             context.startActivity(intent)
-        } else {
-            toast(
-                R.string.open_link_failed_toast,
-                Toast.LENGTH_SHORT
-            )
+        } catch (e: ActivityNotFoundException) {
+            toast(R.string.open_link_failed_toast, Toast.LENGTH_SHORT)
         }
     }
 }

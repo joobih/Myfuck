@@ -3,45 +3,32 @@ package com.topjohnwu.myfuck.ui.settings
 import android.os.Bundle
 import android.view.View
 import com.topjohnwu.myfuck.R
-import com.topjohnwu.myfuck.arch.BaseUIFragment
+import com.topjohnwu.myfuck.arch.BaseFragment
+import com.topjohnwu.myfuck.arch.viewModel
 import com.topjohnwu.myfuck.databinding.FragmentSettingsMd2Binding
-import com.topjohnwu.myfuck.di.viewModel
-import com.topjohnwu.myfuck.ktx.addSimpleItemDecoration
-import com.topjohnwu.myfuck.ktx.addVerticalPadding
-import com.topjohnwu.myfuck.ktx.fixEdgeEffect
-import com.topjohnwu.myfuck.ktx.setOnViewReadyListener
+import rikka.recyclerview.addEdgeSpacing
+import rikka.recyclerview.addItemSpacing
+import rikka.recyclerview.fixEdgeEffect
 
-class SettingsFragment : BaseUIFragment<SettingsViewModel, FragmentSettingsMd2Binding>() {
+class SettingsFragment : BaseFragment<FragmentSettingsMd2Binding>() {
 
     override val layoutRes = R.layout.fragment_settings_md2
     override val viewModel by viewModel<SettingsViewModel>()
+    override val snackbarView: View get() = binding.snackbarContainer
 
     override fun onStart() {
         super.onStart()
 
-        activity.title = resources.getString(R.string.settings)
+        activity?.title = resources.getString(R.string.settings)
     }
 
     override fun onViewCreated(view: View, savedInstanceState: Bundle?) {
         super.onViewCreated(view, savedInstanceState)
-        binding.settingsList.setOnViewReadyListener {
-            binding.settingsList.scrollToPosition(0)
+        binding.settingsList.apply {
+            addEdgeSpacing(bottom = R.dimen.l1)
+            addItemSpacing(R.dimen.l1, R.dimen.l_50, R.dimen.l1)
+            fixEdgeEffect()
         }
-
-        val resource = requireContext().resources
-        val l_50 = resource.getDimensionPixelSize(R.dimen.l_50)
-        val l1 = resource.getDimensionPixelSize(R.dimen.l1)
-        binding.settingsList.addVerticalPadding(
-            0,
-            l1
-        )
-        binding.settingsList.addSimpleItemDecoration(
-            left = l1,
-            top = l_50,
-            right = l1,
-            bottom = l_50,
-        )
-        binding.settingsList.fixEdgeEffect()
     }
 
     override fun onResume() {

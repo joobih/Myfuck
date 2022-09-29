@@ -2,6 +2,9 @@ package com.topjohnwu.myfuck;
 
 import android.content.Context;
 
+import io.michaelrocks.paranoid.Obfuscate;
+
+@Obfuscate
 public class ProviderInstaller {
 
     public static boolean install(Context context) {

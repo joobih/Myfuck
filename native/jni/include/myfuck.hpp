@@ -2,7 +2,9 @@
 
 #include <string>
 
-#define MAIN_SOCKET  "d30138f2310a9fb9c54a3e0c21f58591"
+// myfuckinit will hex patch this constant,
+// appending \0 to prevent the compiler from reusing the string for "1"
+#define MAIN_SOCKET  "d30138f2310a9fb9c54a3e0c21f58591\0"
 #define JAVA_PACKAGE_NAME "com.topjohnwu.myfuck"
 #define LOGFILE         "/cache/myfuck.log"
 #define UNBLOCKFILE     "/dev/.myfuck_unblock"
@@ -11,7 +13,6 @@
 #define MODULEUPGRADE   SECURE_DIR "/modules_update"
 #define DATABIN         SECURE_DIR "/myfuck"
 #define MYFUCKDB        SECURE_DIR "/myfuck.db"
-#define MANAGERAPK      DATABIN "/myfuck.apk"
 
 // tmpfs paths
 extern std::string  MYFUCKTMP;
@@ -22,10 +23,12 @@ extern std::string  MYFUCKTMP;
 #define MODULEMNT   INTLROOT "/modules"
 #define BBPATH      INTLROOT "/busybox"
 #define ROOTOVL     INTLROOT "/rootdir"
+#define SHELLPTS    INTLROOT "/pts"
 #define ROOTMNT     ROOTOVL "/.mount_list"
+#define ZYGISKBIN   INTLROOT "/zygisk"
+#define SELINUXMOCK INTLROOT "/selinux"
 
-constexpr const char *applet_names[] = { "vigo", "resetprop", "myfuckhide", nullptr };
-constexpr const char *init_applet[] = { "myfuckpolicy", "supolicy", nullptr };
+constexpr const char *applet_names[] = { "vigo", "resetprop", nullptr };
 
 #define POST_FS_DATA_WAIT_TIME       40
 #define POST_FS_DATA_SCRIPT_MAX_TIME 35
@@ -35,8 +38,7 @@ extern int SDK_INT;
 
 // Multi-call entrypoints
 int myfuck_main(int argc, char *argv[]);
-int myfuckhide_main(int argc, char *argv[]);
-int myfuckpolicy_main(int argc, char *argv[]);
 int su_client_main(int argc, char *argv[]);
 int resetprop_main(int argc, char *argv[]);
 int app_process_main(int argc, char *argv[]);
+int zygisk_main(int argc, char *argv[]);

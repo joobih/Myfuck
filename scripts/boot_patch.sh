@@ -70,9 +70,11 @@ fi
 # Flags
 [ -z $KEEPVERITY ] && KEEPVERITY=false
 [ -z $KEEPFORCEENCRYPT ] && KEEPFORCEENCRYPT=false
+[ -z $PATCHVBMETAFLAG ] && PATCHVBMETAFLAG=false
 [ -z $RECOVERYMODE ] && RECOVERYMODE=false
 export KEEPVERITY
 export KEEPFORCEENCRYPT
+export PATCHVBMETAFLAG
 
 chmod -R 755 .
 
@@ -99,8 +101,6 @@ case $? in
     ;;
 esac
 
-[ -f recovery_dtbo ] && RECOVERYMODE=true
-
 ###################
 # Ramdisk Restores
 ###################
@@ -111,7 +111,7 @@ if [ -e ramdisk.cpio ]; then
   ./myfuckboot cpio ramdisk.cpio test
   STATUS=$?
 else
-  # Stock A only system-as-root
+  # Stock A only legacy SAR, or some Android 13 GKIs
   STATUS=0
 fi
 case $((STATUS & 3)) in
@@ -135,6 +135,12 @@ case $((STATUS & 3)) in
     ;;
 esac
 
+# Work around custom legacy Sony /init -> /(s)bin/init_sony : /init.real setup
+INIT=init
+if [ $((STATUS & 4)) -ne 0 ]; then
+  INIT=init.real
+fi
+
 ##################
 # Ramdisk Patches
 ##################
@@ -143,19 +149,27 @@ ui_print "- Patching ramdisk"
 
 echo "KEEPVERITY=$KEEPVERITY" > config
 echo "KEEPFORCEENCRYPT=$KEEPFORCEENCRYPT" >> config
+echo "PATCHVBMETAFLAG=$PATCHVBMETAFLAG" >> config
 echo "RECOVERYMODE=$RECOVERYMODE" >> config
 [ ! -z $SHA1 ] && echo "SHA1=$SHA1" >> config
 
 # Compress to save precious ramdisk space
-./myfuckboot compress=xz myfuck32 myfuck32.xz
-./myfuckboot compress=xz myfuck64 myfuck64.xz
-$IS64BIT && SKIP64="" || SKIP64="#"
+SKIP32="#"
+SKIP64="#"
+if [ -f myfuck32 ]; then
+  ./myfuckboot compress=xz myfuck32 myfuck32.xz
+  unset SKIP32
+fi
+if [ -f myfuck64 ]; then
+  ./myfuckboot compress=xz myfuck64 myfuck64.xz
+  unset SKIP64
+fi
 
 ./myfuckboot cpio ramdisk.cpio \
-"add 0750 init myfuckinit" \
+"add 0750 $INIT myfuckinit" \
 "mkdir 0750 overlay.d" \
 "mkdir 0750 overlay.d/sbin" \
-"add 0644 overlay.d/sbin/myfuck32.xz myfuck32.xz" \
+"$SKIP32 add 0644 overlay.d/sbin/myfuck32.xz myfuck32.xz" \
 "$SKIP64 add 0644 overlay.d/sbin/myfuck64.xz myfuck64.xz" \
 "patch" \
 "backup ramdisk.cpio.orig" \
@@ -169,7 +183,15 @@ rm -f ramdisk.cpio.orig config myfuck*.xz
 #################
 
 for dt in dtb kernel_dtb extra; do
-  [ -f $dt ] && ./myfuckboot dtb $dt patch && ui_print "- Patch fstab in $dt"
+  if [ -f $dt ]; then
+    if ! ./myfuckboot dtb $dt test; then
+      ui_print "! Boot image $dt was patched by old (unsupported) Myfuck"
+      abort "! Please try again with *unpatched* boot image"
+    fi
+    if ./myfuckboot dtb $dt patch; then
+      ui_print "- Patch fstab in boot image $dt"
+    fi
+  fi
 done
 
 if [ -f kernel ]; then

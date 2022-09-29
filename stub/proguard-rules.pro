@@ -20,9 +20,13 @@
 # hide the original source file name.
 #-renamesourcefileattribute SourceFile
 
+-obfuscationdictionary ../dict.txt
+-classobfuscationdictionary ../dict.txt
+-packageobfuscationdictionary ../dict.txt
+
 # Excessive obfuscation
 -repackageclasses
 -allowaccessmodification
 -keepclassmembers class com.topjohnwu.myfuck.dummy.* { <init>(); }
 -keepclassmembers class com.topjohnwu.myfuck.DownloadActivity { <init>(); }
--keepclassmembers class com.topjohnwu.myfuck.FileProvider { <init>(); }
+-keepclassmembers class com.topjohnwu.myfuck.DelegateRootService { <init>(); }

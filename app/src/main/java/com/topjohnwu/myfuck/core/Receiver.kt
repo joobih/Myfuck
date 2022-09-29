@@ -1,10 +1,11 @@
 package com.topjohnwu.myfuck.core
 
 import android.annotation.SuppressLint
-import android.content.ContextWrapper
+import android.content.Context
 import android.content.Intent
 import com.topjohnwu.myfuck.core.base.BaseReceiver
-import com.topjohnwu.myfuck.di.ServiceLocator
+import com.topjohnwu.myfuck.core.di.ServiceLocator
+import com.topjohnwu.myfuck.view.Notifications
 import com.topjohnwu.myfuck.view.Shortcuts
 import com.topjohnwu.superuser.Shell
 import kotlinx.coroutines.GlobalScope
@@ -25,8 +26,9 @@ open class Receiver : BaseReceiver() {
         return if (uid == -1) null else uid
     }
 
-    override fun onReceive(context: ContextWrapper, intent: Intent?) {
+    override fun onReceive(context: Context, intent: Intent?) {
         intent ?: return
+        super.onReceive(context, intent)
 
         fun rmPolicy(uid: Int) = GlobalScope.launch {
             policyDB.delete(uid)
@@ -40,9 +42,18 @@ open class Receiver : BaseReceiver() {
             }
             Intent.ACTION_UID_REMOVED -> {
                 getUid(intent)?.let { rmPolicy(it) }
-                getPkg(intent)?.let { Shell.su("myfuckhide rm $it").submit() }
+            }
+            Intent.ACTION_PACKAGE_FULLY_REMOVED -> {
+                getPkg(intent)?.let { Shell.cmd("myfuck --denylist rm $it").submit() }
             }
             Intent.ACTION_LOCALE_CHANGED -> Shortcuts.setupDynamic(context)
+            Intent.ACTION_MY_PACKAGE_REPLACED -> {
+                @Suppress("DEPRECATION")
+                val installer = context.packageManager.getInstallerPackageName(context.packageName)
+                if (installer == context.packageName) {
+                    Notifications.updateDone(context)
+                }
+            }
         }
     }
 }
