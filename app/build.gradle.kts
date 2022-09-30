@@ -65,6 +65,11 @@ configurations.all {
     exclude("org.jetbrains.kotlin", "kotlin-stdlib-jdk8")
 }
 
+//repositories {
+//    maven { url 'https://jitpack.io' }
+//    mavenCentral()
+//}
+
 dependencies {
     implementation(project(":app:shared"))
 
@@ -79,9 +84,9 @@ dependencies {
     implementation("io.noties.markwon:core:4.6.2")
 
     val vLibsu = "5.0.2"
-    implementation("com.github.topjohnwu.libsu:core:${vLibsu}")
-    implementation("com.github.topjohnwu.libsu:service:${vLibsu}")
-    implementation("com.github.topjohnwu.libsu:nio:${vLibsu}")
+    implementation("com.github.joobih.libsu:core:${vLibsu}")
+    implementation("com.github.joobih.libsu:service:${vLibsu}")
+    implementation("com.github.joobih.libsu:nio:${vLibsu}")
 
     val vRetrofit = "2.9.0"
     implementation("com.squareup.retrofit2:retrofit:${vRetrofit}")
